@@ -1,0 +1,153 @@
+# USSD Simulator
+
+A web-based simulator that mimics USSD (Unstructured Supplementary Service Data) functionality typically found on mobile phones. This project provides an interactive interface for users to experience USSD-based product ordering and retail management systems.
+
+![USSD Simulator Screenshot](https://placeholder-image-url.com/ussd-simulator.png)
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [User Roles](#user-roles)
+  - [Customer](#customer)
+  - [Retailer](#retailer)
+- [API Endpoints](#api-endpoints)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Overview
+
+This USSD Simulator creates a realistic mobile phone USSD interface that allows users to interact with a virtual service system. It simulates the text-based menu navigation common in USSD services, complete with mobile phone-style text input and number cycling for text entry.
+
+The application demonstrates a practical use case of connecting customers with retailers, enabling product browsing and ordering through a familiar USSD interface.
+
+## Features
+
+- **Realistic USSD Interface**: Mimics the look and feel of actual USSD services on mobile phones
+- **Multi-Key Text Input**: Features mobile phone-style text input with key cycling
+- **Dual User Roles**: Supports both customer and retailer interactions
+- **Complete Order System**: End-to-end product ordering functionality
+- **Retailer Management**: Product creation, editing, and deletion capabilities
+- **Responsive Design**: Works on various screen sizes
+- **Keyboard Support**: Use your physical keyboard for faster interaction
+
+## Requirements
+
+- Web browser with JavaScript enabled
+- Backend server running on port 3001 (separate component)
+- Node.js environment for the backend API (not included in this repository)
+
+## Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/ussd-simulator.git
+   ```
+
+2. Navigate to the project directory:
+   ```
+   cd ussd-simulator
+   ```
+
+3. Open the `index.html` file in a web browser, or serve it using a local web server:
+   ```
+   # Using Python's built-in server
+   python -m http.server 8000
+   
+   # Or using Node.js with http-server
+   npx http-server
+   ```
+
+4. Make sure your backend API server is running on port 3001.
+
+## Usage
+
+1. Open the application in your web browser
+2. Enter `*#` to start the USSD service
+3. Select your role (Customer or Retailer)
+4. Follow the on-screen prompts to navigate through the menus
+
+## User Roles
+
+### Customer
+
+As a customer, you can:
+- Browse available retailers
+- View products offered by each retailer
+- Place orders with personal information
+- Confirm and submit orders
+
+#### Customer Flow:
+1. Enter `*#` to start
+2. Select "1" for Customer
+3. Select a retailer from the list
+4. Choose a product to order
+5. Enter your name, phone number, and location
+6. Confirm your order details
+
+### Retailer
+
+As a retailer, you can:
+- Register as a new retailer
+- Manage your product inventory
+- Add new products
+- Edit existing products
+- Delete products
+
+#### Retailer Flow:
+1. Enter `*#` to start
+2. Select "2" for Retailer
+3. Choose to register or manage products
+4. If registering, enter your details
+5. If managing products, choose to add, view, edit, or delete products
+
+## API Endpoints
+
+The simulator interacts with the following API endpoints:
+
+- `GET /api/retailers` - Fetch all retailers
+- `POST /api/retailers` - Register a new retailer
+- `GET /api/products/:retailerId` - Fetch products by retailer ID
+- `GET /api/retailers/:retailerId/products` - Fetch products for a specific retailer
+- `POST /api/products` - Add a new product
+- `PUT /api/products/:productId` - Update a product
+- `DELETE /api/products/:productId` - Delete a product
+- `POST /api/orders` - Place a new order
+
+## Keyboard Shortcuts
+
+For faster interaction, the simulator supports keyboard inputs:
+
+- **0-9**: Input corresponding numbers
+- ***** (asterisk): Input asterisk character
+- **#** (hash): Input hash character
+- **Space**: Input space
+- **Backspace/Delete**: Delete last character
+- **Enter**: Send/confirm input
+- **Escape**: Go back/cancel
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
+Developed by [salvius charles]
+use npm start to run project
+since you have saved in any directory..example "c/" use the following to open it in normal window powersh
+ell instead of visual studio powershell cd "C:\xampp\htdocs\ussd-platform"
+

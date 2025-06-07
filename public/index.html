@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USSD Simulator</title>
+  <link rel="stylesheet" href="main.css">
+</head>
+<body>
+  <div class="ussd-screen">
+    <div class="status-bar" id="statusBar">USSD Service</div>
+    <div class="ussd-display">
+      <div class="display-content" id="displayContent">Enter *# to start:</div>
+      <div class="input-line" id="inputLine">
+        <span id="currentInput"></span><span class="input-cursor" id="cursor"></span>
+      </div>
+    </div>
+    <div class="key-info" id="keyInfo">Current key: None</div>
+    <div class="ussd-controls">
+      <button class="ussd-button" onclick="sendInput()" id="sendButton">Send</button>
+      <button class="ussd-button" onclick="goBack()" id="backButton">Back</button>
+      <button class="ussd-button" onclick="deleteInput()" id="deleteButton">Del</button>
+      <button class="ussd-button" onclick="cycleInput(' ')" id="spaceButton">Space</button>
+    </div>
+    <div class="ussd-buttons">
+      <button class="ussd-button" onclick="cycleInput('1')" id="btn1">1<br>. , !</button>
+      <button class="ussd-button" onclick="cycleInput('2')" id="btn2">2<br>A B C</button>
+      <button class="ussd-button" onclick="cycleInput('3')" id="btn3">3<br>D E F</button>
+      <button class="ussd-button" onclick="cycleInput('4')" id="btn4">4<br>G H I</button>
+      <button class="ussd-button" onclick="cycleInput('5')" id="btn5">5<br>J K L</button>
+      <button class="ussd-button" onclick="cycleInput('6')" id="btn6">6<br>M N O</button>
+      <button class="ussd-button" onclick="cycleInput('7')" id="btn7">7<br>P Q R S</button>
+      <button class="ussd-button" onclick="cycleInput('8')" id="btn8">8<br>T U V</button>
+      <button class="ussd-button" onclick="cycleInput('9')" id="btn9">9<br>W X Y Z</button>
+      <button class="ussd-button" onclick="cycleInput('*')" id="btnStar">*</button>
+      <button class="ussd-button" onclick="cycleInput('0')" id="btn0">0<br>+</button>
+      <button class="ussd-button" onclick="cycleInput('#')" id="btnHash">#</button>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
