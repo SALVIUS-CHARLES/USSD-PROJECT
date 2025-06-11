@@ -1,5 +1,5 @@
 const express = require('express');
-const mysql = require('mysql2');
+const mysql = require('mysql2'); // mysql2 supports promises, which is good
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
@@ -45,10 +45,10 @@ app.get('/api/retailers', (req, res) => {
 
 // Add a new retailer (registration)
 app.post('/api/retailers', (req, res) => {
-  const { name, phoneNumber, location, tinNumber } = req.body; // Added tinNumber
+  const { name, phoneNumber, location, tinNumber } = req.body;
   db.query(
-    'INSERT INTO retailers (name, phone_number, location, tin_number) VALUES (?, ?, ?, ?)', // Added tin_number
-    [name, phoneNumber, location, tinNumber], // Added tinNumber
+    'INSERT INTO retailers (name, phone_number, location, tin_number) VALUES (?, ?, ?, ?)',
+    [name, phoneNumber, location, tinNumber],
     (err, result) => {
       if (err) {
         console.error(' Kosa katika kusajili mchuuzi:', err.message);
@@ -61,10 +61,10 @@ app.post('/api/retailers', (req, res) => {
 
 // Retailer Login - Modified to use name and tin_number
 app.post('/api/retailers/login', (req, res) => {
-  const { name, tinNumber } = req.body; // Changed from retailerId to tinNumber
+  const { name, tinNumber } = req.body;
   db.query(
-    'SELECT retailer_id, name, tin_number FROM retailers WHERE name = ? AND tin_number = ?', // Changed to tin_number
-    [name, tinNumber], // Changed to tinNumber
+    'SELECT retailer_id, name, tin_number, phone_number, location FROM retailers WHERE name = ? AND tin_number = ?', // Added phone_number, location for edit
+    [name, tinNumber],
     (err, results) => {
       if (err) {
         console.error(' Kosa la kuingia kwa mchuuzi:', err.message);
@@ -73,7 +73,7 @@ app.post('/api/retailers/login', (req, res) => {
       if (results.length > 0) {
         res.json({ success: true, message: 'Umeingia kwa mafanikio.', retailer: results[0] });
       } else {
-        res.status(401).json({ success: false, error: 'Jina au Nambari ya TIN si sahihi.' }); // Updated error message
+        res.status(401).json({ success: false, error: 'Jina au Nambari ya TIN si sahihi.' });
       }
     }
   );
@@ -82,10 +82,10 @@ app.post('/api/retailers/login', (req, res) => {
 // Update retailer details
 app.put('/api/retailers/:retailerId', (req, res) => {
   const retailerId = req.params.retailerId;
-  const { name, phoneNumber, location, tinNumber } = req.body; // Added tinNumber
+  const { name, phoneNumber, location, tinNumber } = req.body;
   db.query(
-    'UPDATE retailers SET name = ?, phone_number = ?, location = ?, tin_number = ? WHERE retailer_id = ?', // Added tin_number
-    [name, phoneNumber, location, tinNumber, retailerId], // Added tinNumber
+    'UPDATE retailers SET name = ?, phone_number = ?, location = ?, tin_number = ? WHERE retailer_id = ?',
+    [name, phoneNumber, location, tinNumber, retailerId],
     (err, result) => {
       if (err) {
         console.error(' Kosa katika kusahihisha maelezo ya mchuuzi:', err.message);
@@ -98,7 +98,6 @@ app.put('/api/retailers/:retailerId', (req, res) => {
     }
   );
 });
-
 
 // Get products for a specific retailer
 app.get('/api/products/:retailerId', (req, res) => {
@@ -163,55 +162,54 @@ app.delete('/api/products/:productId', (req, res) => {
   });
 });
 
-// Place a new order
-app.post('/api/orders', (req, res) => {
-  const { name, phoneNumber, location, productId, retailerId, product, retailer } = req.body;
+// Place a new order (MODIFIED TO HANDLE MULTIPLE ITEMS)
+app.post('/api/orders', async (req, res) => {
+  const { name, phoneNumber, location, retailerId, items } = req.body; // 'items' is an array of {productId, quantity, price}
 
-  let finalProductId = productId;
-  let finalRetailerId = retailerId;
-
-  // Prioritize objects if provided
-  if (product && product.product_id) {
-    finalProductId = product.product_id;
-  }
-  else if (productId) {
-    finalProductId = productId;
+  if (!retailerId || !items || items.length === 0) {
+    return res.status(400).json({ error: 'Taarifa za agizo si sahihi. Hakikisha kuna retailerId na bidhaa.' });
   }
 
-  if (retailer && retailer.retailer_id) {
-    finalRetailerId = retailer.retailer_id;
-  } else if (retailerId) {
-    finalRetailerId = retailerId;
-  }
+  try {
+    // Start a transaction for atomicity
+    await db.promise().beginTransaction();
 
-  // Validate the final IDs
-  if (!finalProductId) {
-    console.error(' Habari za bidhaa si sahihi');
-    return res.status(400).json({ error: 'Taarifa za bidhaa si sahihi. Tafadhali toa productId au kitu cha bidhaa.' });
-  }
+    // 1. Insert into orders table
+    const [orderResult] = await db.promise().query(
+      'INSERT INTO orders (customer_name, phone_number, location, retailer_id) VALUES (?, ?, ?, ?)',
+      [name, phoneNumber, location, retailerId]
+    );
+    const orderId = orderResult.insertId;
 
-  if (!finalRetailerId) {
-    console.error(' Habari za mchuuzi si sahihi');
-    return res.status(400).json({ error: 'Taarifa za mchuuzi si sahihi. Tafadhali toa retailerId au kitu cha mchuuzi.' });
-  }
-
-  db.query(
-    'INSERT INTO orders (customer_name, phone_number, location, product_id, retailer_id) VALUES (?, ?, ?, ?, ?)',
-    [name, phoneNumber, location, finalProductId, finalRetailerId],
-    (err, result) => {
-      if (err) {
-        console.error(' Kosa katika kutuma agizo:', err.message);
-        return res.status(500).json({ error: 'Imeshindikana kutuma agizo.' });
+    // 2. Insert into order_items table for each item
+    for (const item of items) {
+      const { productId, quantity, price } = item;
+      if (!productId || !quantity || quantity <= 0 || !price || price < 0) {
+        await db.promise().rollback();
+        return res.status(400).json({ error: 'Maelezo ya bidhaa si sahihi kwenye mkokoteni.' });
       }
-      res.status(201).json({ message: 'Agizo limewekwa kikamilifu!', orderId: result.insertId });
+      await db.promise().query(
+        'INSERT INTO order_items (order_id, product_id, quantity, item_price) VALUES (?, ?, ?, ?)',
+        [orderId, productId, quantity, price]
+      );
     }
-  );
+
+    // Commit the transaction
+    await db.promise().commit();
+    res.status(201).json({ message: 'Agizo limewekwa kikamilifu!', orderId: orderId });
+
+  } catch (err) {
+    // Rollback in case of any error
+    await db.promise().rollback();
+    console.error(' Kosa katika kutuma agizo:', err.message);
+    res.status(500).json({ error: 'Imeshindikana kutuma agizo. Tafadhali jaribu tena.' });
+  }
 });
 
-// Get orders for a specific retailer (NEW ENDPOINT)
+// Get orders for a specific retailer (MODIFIED TO FETCH ALL ORDER ITEMS - NO JSON_ARRAYAGG)
 app.get('/api/retailers/:retailerId/orders', (req, res) => {
   const retailerId = req.params.retailerId;
-  const customerNameFilter = req.query.customerName; // Optional filter from frontend
+  const customerNameFilter = req.query.customerName;
 
   let query = `
     SELECT
@@ -220,13 +218,16 @@ app.get('/api/retailers/:retailerId/orders', (req, res) => {
       o.phone_number,
       o.location,
       o.order_status,
+      o.created_at,
       p.product_name,
-      p.product_cost,
-      o.created_at
+      oi.item_price,
+      oi.quantity
     FROM
       orders o
     JOIN
-      products p ON o.product_id = p.product_id
+      order_items oi ON o.order_id = oi.order_id
+    JOIN
+      products p ON oi.product_id = p.product_id
     WHERE
       o.retailer_id = ?
   `;
@@ -237,25 +238,47 @@ app.get('/api/retailers/:retailerId/orders', (req, res) => {
     params.push(`%${customerNameFilter}%`);
   }
 
-  // Order by creation date to show recent orders first
-  query += ` ORDER BY o.created_at DESC`;
+  query += ` ORDER BY o.created_at DESC, o.order_id, p.product_name;`; // Order to help grouping
 
   db.query(query, params, (err, results) => {
     if (err) {
       console.error(' Kosa katika kupata maagizo ya mchuuzi:', err.message);
       return res.status(500).json({ error: 'Imeshindikana kupata maagizo ya mchuuzi.' });
     }
-    res.json(results);
+
+    // Manually group the results in Node.js
+    const ordersMap = new Map();
+
+    results.forEach(row => {
+      if (!ordersMap.has(row.order_id)) {
+        ordersMap.set(row.order_id, {
+          order_id: row.order_id,
+          customer_name: row.customer_name,
+          phone_number: row.phone_number,
+          location: row.location,
+          order_status: row.order_status,
+          created_at: row.created_at,
+          items: []
+        });
+      }
+      ordersMap.get(row.order_id).items.push({
+        product_name: row.product_name,
+        product_cost: row.item_price,
+        quantity: row.quantity
+      });
+    });
+
+    const groupedOrders = Array.from(ordersMap.values());
+    res.json(groupedOrders);
   });
 });
 
-// Endpoint to update order status (NEW ENDPOINT)
+// Endpoint to update order status
 app.put('/api/orders/:orderId/status', (req, res) => {
   const orderId = req.params.orderId;
-  const { status } = req.body; // 'approved' or 'rejected'
+  const { status } = req.body;
 
-  // Validate status
-  if (!['approved', 'rejected', 'pending', 'agizo limepitishwa'].includes(status)) { // Added 'agizo limepitishwa'
+  if (!['approved', 'rejected', 'pending', 'agizo limepitishwa'].includes(status)) {
     return res.status(400).json({ error: 'Hali ya agizo si sahihi. Lazima iwe approved, rejected, pending, au agizo limepitishwa.' });
   }
 

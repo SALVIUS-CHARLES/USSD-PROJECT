@@ -18,7 +18,7 @@ let orderDetails = {
   name: "",
   phoneNumber: "",
   location: "",
-  product: null,
+  cart: [], // Changed: Now an array to hold multiple products {product: obj, quantity: num}
   retailer: null
 };
 
@@ -75,7 +75,9 @@ function updateDisplay() {
 
   if ((currentStep === "selectRole" && !currentInput) ||
     (currentStep === "selectRetailer" && !currentInput) ||
-    (currentStep === "selectProduct" && !currentInput)) {
+    (currentStep === "selectProduct" && !currentInput) ||
+    (currentStep === "selectProductQuantity" && !currentInput) || // New: for quantity
+    (currentStep === "addToCartOptions" && !currentInput)) { // New: for cart options
     document.getElementById("inputLine").style.display = "none";
   } else {
     document.getElementById("inputLine").style.display = "flex";
@@ -149,15 +151,32 @@ function goBack() {
 }
 
 function customerGoBack() {
-  if (currentStep === "selectRetailer" || currentStep === "selectProduct") {
-    currentStep = "start";
-    ussdInput = "Weka Nambari ya USSD (mfano: *#)";
+  if (currentStep === "selectRetailer") { // From retailer selection, go to role selection
+    currentStep = "selectRole";
+    ussdInput = "Chagua chaguo:\n1. Mteja\n2. Mfanyabiashara";
     currentInput = "";
-    userRole = null;
-  } else if (currentStep === "enterName") {
+    userRole = null; // Reset role if going back from initial selection
+  } else if (currentStep === "selectProduct") { // From product selection, go to retailer selection
+    currentStep = "selectRetailer";
+    currentInput = "";
+    fetchRetailers(); // Re-fetch retailers list
+  } else if (currentStep === "selectProductQuantity") { // New: Back from quantity, go to product selection
     currentStep = "selectProduct";
     currentInput = "";
-    fetchProducts();
+    fetchProducts(); // Re-fetch products for the current retailer
+  } else if (currentStep === "addToCartOptions") { // New: Back from cart options, go to quantity selection
+    currentStep = "selectProductQuantity";
+    ussdInput = `Weka idadi ya ${orderDetails.cart[orderDetails.cart.length - 1].product.product_name}:`;
+    currentInput = "";
+  } else if (currentStep === "enterName") { // From entering name, go back to add to cart options (if cart not empty) or product selection
+    if (orderDetails.cart.length > 0) {
+      currentStep = "addToCartOptions";
+      showAddToCartOptions();
+    } else { // Should not happen with new flow, but as fallback
+      currentStep = "selectProduct";
+      fetchProducts();
+    }
+    currentInput = "";
   } else if (currentStep === "enterPhoneNumber") {
     currentStep = "enterName";
     currentInput = "";
@@ -176,7 +195,12 @@ function customerGoBack() {
     currentInput = "";
     resetCustomer();
   } else {
+    // Default fallback for any other unexpected state
+    ussdInput = "bofya *# kuanza";
     currentInput = "";
+    currentStep = "start";
+    userRole = null;
+    resetCustomer(); // Ensure full reset if getting stuck
   }
 }
 
@@ -329,8 +353,11 @@ function handleCustomerInput(userInput) {
       const retailerIndex = parseInt(userInput) - 1;
       if (!isNaN(retailerIndex) && retailerIndex >= 0 && retailerIndex < retailerList.length) {
         orderDetails.retailer = retailerList[retailerIndex];
+        orderDetails.cart = []; // Clear cart for new retailer selection
         currentStep = "selectProduct";
         fetchProducts();
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back to role selection
       } else {
         ussdInput = "Chaguo si sahihi. Tafadhali jaribu tena.";
       }
@@ -339,11 +366,52 @@ function handleCustomerInput(userInput) {
     case "selectProduct":
       const productIndex = parseInt(userInput) - 1;
       if (!isNaN(productIndex) && productIndex >= 0 && productIndex < productList.length) {
-        orderDetails.product = productList[productIndex];
-        currentStep = "enterName";
-        ussdInput = "Weka jina lako:";
+        // Store the selected product temporarily to ask for quantity
+        orderDetails.currentProductSelection = productList[productIndex];
+        currentStep = "selectProductQuantity";
+        ussdInput = `Weka idadi ya ${productList[productIndex].product_name}:`;
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back to retailer selection
       } else {
         ussdInput = "Chaguo si sahihi. Tafadhali jaribu tena.";
+      }
+      break;
+
+    case "selectProductQuantity": // New Case: Get quantity for selected product
+      const quantity = parseInt(userInput);
+      if (!isNaN(quantity) && quantity > 0) {
+        const selectedProductWithQuantity = {
+          product: orderDetails.currentProductSelection,
+          quantity: quantity
+        };
+        orderDetails.cart.push(selectedProductWithQuantity);
+        orderDetails.currentProductSelection = null; // Clear temporary selection
+        currentStep = "addToCartOptions";
+        showAddToCartOptions();
+      } else if (userInput === "0") { // Allow going back from quantity selection
+        customerGoBack();
+      } else {
+        ussdInput = "Idadi si sahihi. Tafadhali weka nambari chanya.";
+      }
+      break;
+
+    case "addToCartOptions": // New Case: Ask to add more or checkout
+      if (userInput === "1") {
+        currentStep = "selectProduct";
+        fetchProducts(); // Loop back to product selection
+      } else if (userInput === "2") {
+        if (orderDetails.cart.length > 0) {
+          currentStep = "enterName";
+          ussdInput = "Weka jina lako:";
+        } else {
+          ussdInput = "Mkokoteni hauna bidhaa. Tafadhali ongeza bidhaa kwanza.";
+          currentStep = "selectProduct"; // Go back to product selection
+          fetchProducts();
+        }
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back (should be to quantity selection or product selection based on logic)
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 1 kuongeza zaidi, 2 kulipa, au 0 kurudi.";
       }
       break;
 
@@ -372,15 +440,22 @@ function handleCustomerInput(userInput) {
         resetCustomer();
         ussdInput = "Agizo limeghairi. bofya *# kuanza tena.";
         currentStep = "start";
+      } else if (userInput === "0") { // Allow going back from confirmation
+        customerGoBack();
       } else {
-        ussdInput = "Chaguo si sahihi. Weka 1 kukubali au 2 kughairi.";
+        ussdInput = "Chaguo si sahihi. Weka 1 kukubali, 2 kughairi, au 0 kurudi.";
       }
       break;
 
     case "orderSuccess":
-      resetCustomer();
-      ussdInput = "bofya *# kuanza";
-      currentStep = "start";
+      // User is informed, and 0 will take them back to start
+      if (userInput === "0") {
+        resetCustomer();
+        ussdInput = "bofya *# kuanza";
+        currentStep = "start";
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 0 kurudi kuanza.";
+      }
       break;
 
     default:
@@ -398,7 +473,7 @@ function fetchRetailers() {
       retailerList.forEach((retailer, index) => {
         ussdInput += `${index + 1}. ${retailer.name} (${retailer["phone_number"]})\n`;
       });
-      ussdInput += "0. Rudi";
+      ussdInput += "0. Rudi"; // Added "0. Rudi" option
       currentStep = "selectRetailer";
       updateDisplay();
     })
@@ -419,7 +494,7 @@ function fetchProducts() {
       productList.forEach((product, index) => {
         ussdInput += `${index + 1}. ${product.product_name} - TSH ${product.product_cost}\n`;
       });
-      ussdInput += "0. Rudi";
+      ussdInput += "0. Rudi"; // Added "0. Rudi" option
       updateDisplay();
     })
     .catch(err => {
@@ -429,19 +504,53 @@ function fetchProducts() {
     });
 }
 
+function showAddToCartOptions() {
+  let currentCartSummary = "";
+  if (orderDetails.cart.length > 0) {
+    currentCartSummary = "\nBidhaa Zilizopo kwenye Mkokoteni:\n";
+    orderDetails.cart.forEach(item => {
+      currentCartSummary += `- ${item.product.product_name} (x${item.quantity}) - TSH ${item.product.product_cost * item.quantity}\n`;
+    });
+    currentCartSummary += `Jumla ya Gharama: TSH ${calculateCartTotal()}\n`;
+  }
+
+  ussdInput = `Bidhaa imeongezwa kwenye mkokoteni.${currentCartSummary}\n
+Chagua:\n1. Ongeza bidhaa nyingine\n2. Maliza agizo\n0. Rudi`;
+  updateDisplay();
+}
+
+function calculateCartTotal() {
+  return orderDetails.cart.reduce((total, item) => total + (item.product.product_cost * item.quantity), 0);
+}
+
+
 function showOrderConfirmation() {
-  ussdInput = `Hakiki agizo:\n
+  let orderSummary = `Hakiki agizo:\n
 Jina: ${orderDetails.name}
 Simu: ${orderDetails.phoneNumber}
 Eneo: ${orderDetails.location}
-Bidhaa: ${orderDetails.product.product_name} - TSH ${orderDetails.product.product_cost}\n
+Mfanyabiashara: ${orderDetails.retailer.name}\n
+Bidhaa Zilizochaguliwa:\n`;
+
+  orderDetails.cart.forEach(item => {
+    orderSummary += `- ${item.product.product_name} (x${item.quantity}) - TSH ${item.product.product_cost * item.quantity}\n`;
+  });
+
+  orderSummary += `Jumla ya Gharama: TSH ${calculateCartTotal()}\n
 1. Kukubali
 2. Kughairi
-0. Rudi`;
+0. Rudi`; // Added "0. Rudi" option
+  ussdInput = orderSummary;
   updateDisplay();
 }
 
 function placeOrder() {
+  const orderItems = orderDetails.cart.map(item => ({
+    productId: item.product.product_id,
+    quantity: item.quantity,
+    price: item.product.product_cost // Include price for backend calculation/record
+  }));
+
   fetch("http://localhost:3001/api/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -449,8 +558,8 @@ function placeOrder() {
       name: orderDetails.name,
       phoneNumber: orderDetails.phoneNumber,
       location: orderDetails.location,
-      productId: orderDetails.product.product_id,
-      retailerId: orderDetails.retailer.retailer_id
+      retailerId: orderDetails.retailer.retailer_id,
+      items: orderItems // Send array of items
     }),
   })
     .then(response => response.json())
@@ -458,20 +567,20 @@ function placeOrder() {
       currentStep = "orderSuccess";
       ussdInput = `Agizo limefanikiwa!\n
 Nambari ya Agizo: ${data.orderId}
-Bidhaa: ${orderDetails.product.product_name}
 Mfanyabiashara: ${orderDetails.retailer.name}
-Kiasi: TSH ${orderDetails.product.product_cost}\n
+Jumla ya Kiasi: TSH ${calculateCartTotal()}\n
 Ndugu mteja!.
 utapigiwa simu punde kupokea agizo lako na kulipia bidhaa.
 Ahsante!\n
-0. Rudi`;
+0. Rudi`; // Added "0. Rudi" option
       updateDisplay();
-      resetCustomer();
+      resetCustomer(); // Reset after successful order
     })
     .catch(err => {
-      ussdInput = "Kosa wakati wa kutuma agizo. Tafadhali jaribu tena.";
+      ussdInput = "Kosa wakati wa kutuma agizo. Tafadhali jaribu tena.\n0. Rudi"; // Added "0. Rudi" option
       updateDisplay();
       console.error(err);
+      currentStep = "confirmOrder"; // Allow user to go back or retry
     });
 }
 
@@ -483,14 +592,15 @@ function resetCustomer() {
     name: "",
     phoneNumber: "",
     location: "",
-    product: null,
-    retailer: null
+    cart: [], // Reset cart
+    retailer: null,
+    currentProductSelection: null // Reset temp selection
   };
   retailerList = [];
   productList = [];
 }
 
-// Retailer functionality
+// Retailer functionality (No changes here, as per your request, focusing only on customer multi-item order)
 function handleRetailerInput(userInput) {
   switch (currentStep) {
     case "retailerMenu":
@@ -677,7 +787,9 @@ function handleRetailerInput(userInput) {
       if (!isNaN(orderIndex) && orderIndex >= 0 && orderIndex < orders.length) {
         selectedOrder = orders[orderIndex];
         currentStep = "orderAction";
-        ussdInput = `Agizo #${selectedOrder.order_id} - ${selectedOrder.customer_name}\nBidhaa: ${selectedOrder.product_name}\nHali ya sasa: ${selectedOrder.order_status}\n\n1. Pitisha\n2. Kataa\n0. Rudi`;
+        // Construct product summary for display in order action
+        let productSummaryForAction = selectedOrder.items.map(item => `${item.product_name} (x${item.quantity}) - TSH ${item.product_cost}`).join(', ');
+        ussdInput = `Agizo #${selectedOrder.order_id} - ${selectedOrder.customer_name}\nBidhaa: ${productSummaryForAction}\nHali ya sasa: ${selectedOrder.order_status}\n\n1. Pitisha\n2. Kataa\n0. Rudi`;
       } else if (userInput === "0") {
         currentStep = "retailerMenu";
         ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
@@ -1039,7 +1151,8 @@ function fetchRetailerOrders(customerName = "") {
         currentStep = "ordersList"; // Still ordersList, but no actions
       } else {
         orders.forEach((order, index) => {
-          ussdInput += `${index + 1}. Jina: ${order.customer_name}, Simu: ${order.phone_number}, Bidhaa: ${order.product_name} (TSH ${order.product_cost}), Eneo: ${order.location}, Hali: ${order.order_status}\n`;
+          let productSummary = order.items.map(item => `${item.product_name} (x${item.quantity}) - TSH ${item.product_cost}`).join(', '); //
+          ussdInput += `${index + 1}. Jina: ${order.customer_name}, Simu: ${order.phone_number}, Bidhaa: ${productSummary}, Eneo: ${order.location}, Hali: ${order.order_status}\n`; //
         });
         ussdInput += "\nChagua agizo (nambari) kulichukulia hatua, au 0 kurudi.";
         currentStep = "selectOrderToActOn"; // New step to select order
