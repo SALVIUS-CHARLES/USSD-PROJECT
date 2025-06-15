@@ -21,6 +21,9 @@ let orderDetails = {
   cart: [], // Changed: Now an array to hold multiple products {product: obj, quantity: num}
   retailer: null
 };
+let customerOrders = []; // NEW: To store fetched customer orders
+let selectedOrderForFeedback = null; // NEW: To store the order chosen for feedback
+let selectedProductForFeedback = null; // NEW: To store the product chosen for feedback
 
 // Retailer variables
 let retailerDetails = {
@@ -38,7 +41,7 @@ let retailerDetails = {
 };
 let productAction = "";
 let products = [];
-let orders = []; // To store fetched orders
+let orders = []; // To store fetched retailer orders
 let selectedOrder = null; // New: To store the order chosen for action
 
 const keyMapping = {
@@ -77,7 +80,14 @@ function updateDisplay() {
     (currentStep === "selectRetailer" && !currentInput) ||
     (currentStep === "selectProduct" && !currentInput) ||
     (currentStep === "selectProductQuantity" && !currentInput) || // New: for quantity
-    (currentStep === "addToCartOptions" && !currentInput)) { // New: for cart options
+    (currentStep === "addToCartOptions" && !currentInput) || // New: for cart options
+    (currentStep === "customerMenu" && !currentInput) || // NEW: Customer menu
+    (currentStep === "enterCustomerPhoneNumberForOrders" && !currentInput) || // NEW: Customer phone for orders
+    (currentStep === "viewCustomerOrders" && !currentInput) || // NEW: View customer orders
+    (currentStep === "customerSelectFeedbackType" && !currentInput) || // NEW: Select feedback type
+    (currentStep === "customerSelectProductForFeedback" && !currentInput) || // NEW: Select product for feedback
+    (currentStep === "customerProvideFeedback" && !currentInput) || // NEW: Provide feedback
+    (currentStep === "feedbackSuccess" && !currentInput)) { // NEW: Feedback success
     document.getElementById("inputLine").style.display = "none";
   } else {
     document.getElementById("inputLine").style.display = "flex";
@@ -151,20 +161,24 @@ function goBack() {
 }
 
 function customerGoBack() {
-  if (currentStep === "selectRetailer") { // From retailer selection, go to role selection
+  if (currentStep === "customerMenu") { // NEW: From customer menu, go to role selection
     currentStep = "selectRole";
     ussdInput = "Chagua chaguo:\n1. Mteja\n2. Mfanyabiashara";
     currentInput = "";
     userRole = null; // Reset role if going back from initial selection
+  } else if (currentStep === "selectRetailer") { // From retailer selection, go to customer menu
+    currentStep = "customerMenu";
+    ussdInput = "Menyu ya Mteja:\n1. Tuma Agizo Jipya\n2. Angalia Maagizo Yangu\n0. Rudi";
+    currentInput = "";
   } else if (currentStep === "selectProduct") { // From product selection, go to retailer selection
     currentStep = "selectRetailer";
     currentInput = "";
     fetchRetailers(); // Re-fetch retailers list
-  } else if (currentStep === "selectProductQuantity") { // New: Back from quantity, go to product selection
+  } else if (currentStep === "selectProductQuantity") { // Back from quantity, go to product selection
     currentStep = "selectProduct";
     currentInput = "";
     fetchProducts(); // Re-fetch products for the current retailer
-  } else if (currentStep === "addToCartOptions") { // New: Back from cart options, go to quantity selection
+  } else if (currentStep === "addToCartOptions") { // Back from cart options, go to quantity selection
     currentStep = "selectProductQuantity";
     ussdInput = `Weka idadi ya ${orderDetails.cart[orderDetails.cart.length - 1].product.product_name}:`;
     currentInput = "";
@@ -190,11 +204,39 @@ function customerGoBack() {
     currentInput = "";
     ussdInput = "Weka eneo lako:";
   } else if (currentStep === "orderSuccess") {
-    currentStep = "start";
-    ussdInput = "Weka *# kuanza";
+    currentStep = "customerMenu"; // Go back to customer menu
+    ussdInput = "Menyu ya Mteja:\n1. Tuma Agizo Jipya\n2. Angalia Maagizo Yangu\n0. Rudi";
     currentInput = "";
-    resetCustomer();
-  } else {
+    resetCustomerDetails(); // Reset only order details, not the entire customer state
+  } else if (currentStep === "enterCustomerPhoneNumberForOrders") { // NEW: From entering customer phone, go to customer menu
+    currentStep = "customerMenu";
+    ussdInput = "Menyu ya Mteja:\n1. Tuma Agizo Jipya\n2. Angalia Maagizo Yangu\n0. Rudi";
+    currentInput = "";
+  } else if (currentStep === "viewCustomerOrders") { // NEW: From viewing customer orders, go to customer menu
+    currentStep = "customerMenu";
+    ussdInput = "Menyu ya Mteja:\n1. Tuma Agizo Jipya\n2. Angalia Maagizo Yangu\n0. Rudi";
+    currentInput = "";
+    customerOrders = []; // Clear viewed orders
+    selectedOrderForFeedback = null; // NEW: Clear selected order for feedback
+  } else if (currentStep === "customerSelectFeedbackType") { // NEW: Back from feedback type selection
+    currentStep = "viewCustomerOrders";
+    showCustomerOrdersForFeedback(); // Re-display orders with feedback option
+  } else if (currentStep === "customerSelectProductForFeedback") { // NEW: Back from product selection for feedback
+    currentStep = "customerSelectFeedbackType";
+    ussdInput = "Chagua aina ya maoni:\n1. Kwa Mfanyabiashara\n2. Kwa Bidhaa\n0. Rudi";
+  } else if (currentStep === "customerProvideFeedback") { // NEW: Back from providing feedback
+    if (selectedProductForFeedback) {
+      currentStep = "customerSelectProductForFeedback";
+      showProductsForFeedback(selectedOrderForFeedback);
+    } else {
+      currentStep = "customerSelectFeedbackType";
+      ussdInput = "Chagua aina ya maoni:\n1. Kwa Mfanyabiashara\n2. Kwa Bidhaa\n0. Rudi";
+    }
+  } else if (currentStep === "feedbackSuccess") { // NEW: Back from feedback success
+    currentStep = "customerMenu";
+    ussdInput = "Menyu ya Mteja:\n1. Tuma Agizo Jipya\n2. Angalia Maagizo Yangu\n0. Rudi";
+  }
+  else {
     // Default fallback for any other unexpected state
     ussdInput = "bofya *# kuanza";
     currentInput = "";
@@ -215,7 +257,7 @@ function retailerGoBack() {
   } else if (currentStep === "enterRetailerName") {
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
   } else if (currentStep === "enterRetailerPhone") {
     currentStep = "enterRetailerName";
     currentInput = "";
@@ -232,7 +274,7 @@ function retailerGoBack() {
   else if (currentStep === "productMenu") {
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
   } else if (currentStep === "addProductName") {
     currentStep = "productMenu";
     currentInput = "";
@@ -260,7 +302,7 @@ function retailerGoBack() {
   } else if (currentStep === "selectOrderToActOn" || currentStep === "ordersList") { // ordersList is for when no orders or after action
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
     selectedOrder = null;
   } else if (currentStep === "orderAction") {
     currentStep = "selectOrderToActOn";
@@ -271,7 +313,7 @@ function retailerGoBack() {
   else if (currentStep === "retailerLoginName") {
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
     retailerDetails.loginName = "";
     retailerDetails.loginTin = "";
   } else if (currentStep === "retailerLoginTin") { // Changed from retailerLoginId
@@ -282,7 +324,7 @@ function retailerGoBack() {
   } else if (currentStep === "editRetailerName") {
     currentStep = "retailerMenu"; // After editing, go back to main retailer menu
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
   } else if (currentStep === "editRetailerPhone") {
     currentStep = "editRetailerName";
     currentInput = "";
@@ -295,6 +337,10 @@ function retailerGoBack() {
     currentStep = "editRetailerLocation";
     currentInput = "";
     ussdInput = `Badili eneo (sasa: ${retailerDetails.location}):`;
+  } else if (currentStep === "viewDailySales") { // NEW: Back from daily sales view
+    currentStep = "retailerMenu";
+    currentInput = "";
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
   }
   else {
     currentInput = "";
@@ -322,12 +368,13 @@ function sendInput() {
     if (userInputText === "1") {
       userRole = "customer";
       currentInput = "";
-      fetchRetailers();
+      currentStep = "customerMenu"; // NEW: Go to customer menu
+      ussdInput = "Menyu ya Mteja:\n1. Tuma Agizo Jipya\n2. Angalia Maagizo Yangu\n0. Rudi"; // NEW: Customer menu options
     } else if (userInputText === "2") {
       userRole = "retailer";
       currentStep = "retailerMenu";
       currentInput = "";
-      ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+      ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu here
     } else {
       ussdInput = "Chaguo si sahihi. Weka 1 au 2.";
       currentInput = "";
@@ -349,6 +396,90 @@ function sendInput() {
 // Customer functionality
 function handleCustomerInput(userInput) {
   switch (currentStep) {
+    case "customerMenu": // NEW: Handle input from customer main menu
+      if (userInput === "1") {
+        currentStep = "selectRetailer";
+        fetchRetailers(); // Proceed to place new order
+      } else if (userInput === "2") {
+        currentStep = "enterCustomerPhoneNumberForOrders"; // Proceed to view past orders
+        ussdInput = "Weka nambari yako ya simu kuona maagizo:";
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back to role selection
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 1, 2 au 0.";
+      }
+      break;
+
+    case "enterCustomerPhoneNumberForOrders": // NEW: Handle customer phone number input for orders
+      orderDetails.phoneNumber = userInput; // Reuse orderDetails.phoneNumber for this purpose
+      fetchCustomerOrders(userInput);
+      break;
+
+    case "viewCustomerOrders": // NEW: Handle input from customer orders view
+      const selectedOrderIndex = parseInt(userInput) - 1; // Assuming user selects an order to give feedback on
+
+      if (!isNaN(selectedOrderIndex) && selectedOrderIndex >= 0 && selectedOrderIndex < customerOrders.length) {
+        selectedOrderForFeedback = customerOrders[selectedOrderIndex]; // Store the selected order
+        currentStep = "customerSelectFeedbackType";
+        ussdInput = `Chagua aina ya maoni kwa agizo #${selectedOrderForFeedback.order_id}:\n1. Kwa Mfanyabiashara\n2. Kwa Bidhaa\n0. Rudi`;
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back to customer menu
+      } else {
+        ussdInput = "Chaguo si sahihi. Tafadhali chagua nambari ya agizo, au 0 kurudi.";
+      }
+      break;
+
+    case "customerSelectFeedbackType": // NEW: Handle feedback type selection
+      if (userInput === "1") { // Feedback for Retailer
+        currentStep = "customerProvideFeedback";
+        ussdInput = `Weka maoni yako kwa mfanyabiashara ${selectedOrderForFeedback.retailer_name} kuhusu agizo #${selectedOrderForFeedback.order_id}:`;
+        selectedProductForFeedback = null; // Ensure product feedback is cleared
+      } else if (userInput === "2") { // Feedback for Product
+        if (selectedOrderForFeedback && selectedOrderForFeedback.items && selectedOrderForFeedback.items.length > 0) {
+          currentStep = "customerSelectProductForFeedback";
+          showProductsForFeedback(selectedOrderForFeedback);
+        } else {
+          ussdInput = "Hakuna bidhaa katika agizo hili la kutoa maoni. Tafadhali chagua aina nyingine au rudi.\n1. Kwa Mfanyabiashara\n0. Rudi";
+        }
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back to view customer orders
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 1 kwa Mfanyabiashara, 2 kwa Bidhaa, au 0 kurudi.";
+      }
+      break;
+
+    case "customerSelectProductForFeedback": // NEW: Handle product selection for feedback
+      const feedbackProductIndex = parseInt(userInput) - 1; // Renamed variable
+      if (!isNaN(feedbackProductIndex) && feedbackProductIndex >= 0 && feedbackProductIndex < selectedOrderForFeedback.items.length) {
+        selectedProductForFeedback = selectedOrderForFeedback.items[feedbackProductIndex];
+        currentStep = "customerProvideFeedback";
+        ussdInput = `Weka maoni yako kwa bidhaa ${selectedProductForFeedback.product_name} kutoka kwa mfanyabiashara ${selectedOrderForFeedback.retailer_name}:`;
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back to feedback type selection
+      } else {
+        ussdInput = "Chaguo si sahihi. Tafadhali chagua nambari ya bidhaa au 0 kurudi.";
+      }
+      break;
+
+    case "customerProvideFeedback": // NEW: Handle actual feedback input
+      const feedbackText = userInput;
+      if (feedbackText.length > 0) {
+        sendFeedback(feedbackText);
+      } else if (userInput === "0") {
+        customerGoBack(); // Go back without sending feedback
+      } else {
+        ussdInput = "Maoni hayawezi kuwa tupu. Tafadhali weka maoni yako au 0 kurudi.";
+      }
+      break;
+
+    case "feedbackSuccess": // NEW: After feedback is successfully sent
+      if (userInput === "0") {
+        customerGoBack(); // Go back to customer menu
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 0 kurudi.";
+      }
+      break;
+
     case "selectRetailer":
       const retailerIndex = parseInt(userInput) - 1;
       if (!isNaN(retailerIndex) && retailerIndex >= 0 && retailerIndex < retailerList.length) {
@@ -357,19 +488,19 @@ function handleCustomerInput(userInput) {
         currentStep = "selectProduct";
         fetchProducts();
       } else if (userInput === "0") {
-        customerGoBack(); // Go back to role selection
+        customerGoBack(); // Go back to customer menu
       } else {
         ussdInput = "Chaguo si sahihi. Tafadhali jaribu tena.";
       }
       break;
 
     case "selectProduct":
-      const productIndex = parseInt(userInput) - 1;
-      if (!isNaN(productIndex) && productIndex >= 0 && productIndex < productList.length) {
+      const selectedProductOrderIndex = parseInt(userInput) - 1; // Renamed variable
+      if (!isNaN(selectedProductOrderIndex) && selectedProductOrderIndex >= 0 && selectedProductOrderIndex < productList.length) {
         // Store the selected product temporarily to ask for quantity
-        orderDetails.currentProductSelection = productList[productIndex];
+        orderDetails.currentProductSelection = productList[selectedProductOrderIndex];
         currentStep = "selectProductQuantity";
-        ussdInput = `Weka idadi ya ${productList[productIndex].product_name}:`;
+        ussdInput = `Weka idadi ya ${productList[selectedProductOrderIndex].product_name}:`;
       } else if (userInput === "0") {
         customerGoBack(); // Go back to retailer selection
       } else {
@@ -421,7 +552,7 @@ function handleCustomerInput(userInput) {
       ussdInput = "Weka nambari yako ya simu:";
       break;
 
-    case "enterPhoneNumber":
+    case "enterPhoneNumber": // This is used for order placement customer's phone number
       orderDetails.phoneNumber = userInput;
       currentStep = "enterLocation";
       ussdInput = "Weka eneo lako:";
@@ -437,9 +568,10 @@ function handleCustomerInput(userInput) {
       if (userInput === "1") {
         placeOrder();
       } else if (userInput === "2") {
-        resetCustomer();
-        ussdInput = "Agizo limeghairi. bofya *# kuanza tena.";
-        currentStep = "start";
+        resetCustomerDetails(); // Reset only order details
+        ussdInput = "Agizo limeghairi. bofya *# kuanza tena."; // Maybe go back to customer menu?
+        currentStep = "customerMenu";
+        ussdInput = "Menyu ya Mteja:\n1. Tuma Agizo Jipya\n2. Angalia Maagizo Yangu\n0. Rudi";
       } else if (userInput === "0") { // Allow going back from confirmation
         customerGoBack();
       } else {
@@ -448,13 +580,11 @@ function handleCustomerInput(userInput) {
       break;
 
     case "orderSuccess":
-      // User is informed, and 0 will take them back to start
+      // User is informed, and 0 will take them back to customer menu
       if (userInput === "0") {
-        resetCustomer();
-        ussdInput = "bofya *# kuanza";
-        currentStep = "start";
+        customerGoBack(); // Go back to customer menu
       } else {
-        ussdInput = "Chaguo si sahihi. Weka 0 kurudi kuanza.";
+        ussdInput = "Chaguo si sahihi. Weka 0 kurudi.";
       }
       break;
 
@@ -574,7 +704,7 @@ utapigiwa simu punde kupokea agizo lako na kulipia bidhaa.
 Ahsante!\n
 0. Rudi`; // Added "0. Rudi" option
       updateDisplay();
-      resetCustomer(); // Reset after successful order
+      resetCustomerDetails(); // Reset after successful order
     })
     .catch(err => {
       ussdInput = "Kosa wakati wa kutuma agizo. Tafadhali jaribu tena.\n0. Rudi"; // Added "0. Rudi" option
@@ -584,23 +714,128 @@ Ahsante!\n
     });
 }
 
-function resetCustomer() {
-  currentStep = "start";
-  userRole = null;
-  currentInput = "";
+// Resets only order-specific details after an order is placed/cancelled
+function resetCustomerDetails() {
   orderDetails = {
     name: "",
     phoneNumber: "",
     location: "",
-    cart: [], // Reset cart
+    cart: [],
     retailer: null,
-    currentProductSelection: null // Reset temp selection
+    currentProductSelection: null
   };
-  retailerList = [];
-  productList = [];
+  retailerList = []; // Clear for next potential order
+  productList = []; // Clear for next potential order
 }
 
-// Retailer functionality (No changes here, as per your request, focusing only on customer multi-item order)
+// Full reset for customer role
+function resetCustomer() {
+  currentStep = "start";
+  userRole = null;
+  currentInput = "";
+  resetCustomerDetails(); // Calls the specific reset for order details
+  customerOrders = []; // NEW: Also clear customer orders
+  selectedOrderForFeedback = null; // NEW: Clear selected order for feedback
+  selectedProductForFeedback = null; // NEW: Clear selected product for feedback
+}
+
+// NEW FUNCTION: Fetch and display customer's past orders
+function fetchCustomerOrders(phoneNumber) {
+  fetch(`http://localhost:3001/api/customer-orders/${phoneNumber}`)
+    .then(response => response.json())
+    .then(data => {
+      customerOrders = data;
+      let ussdOutput = "Maagizo Yako ya Zamani:\n";
+      if (customerOrders.length === 0) {
+        ussdOutput += "Hakuna maagizo yaliyopatikana kwa nambari hii ya simu.";
+      } else {
+        customerOrders.forEach((order, index) => {
+          // Calculate total for each order
+          let orderTotal = order.items.reduce((sum, item) => sum + (item.product_cost * item.quantity), 0);
+          ussdOutput += `\n${index + 1}. Agizo #${order.order_id} - ${order.customer_name}\n`; // Add index for selection
+          ussdOutput += ` Mfanyabiashara: ${order.retailer_name}\n`; // Display retailer name
+          ussdOutput += ` Hali: ${order.order_status}\n`;
+          ussdOutput += ` Jumla: TSH ${orderTotal.toFixed(0)}\n`; // Display total for this order
+        });
+        ussdOutput += "\n\nChagua nambari ya agizo kutoa maoni, au 0 kurudi."; // Updated prompt
+      }
+      ussdOutput += "\n0. Rudi";
+      ussdInput = ussdOutput;
+      currentStep = "viewCustomerOrders";
+      updateDisplay();
+    })
+    .catch(err => {
+      ussdInput = "Kosa wakati wa kupata maagizo. Tafadhali jaribu tena.\n\n0. Rudi";
+      currentStep = "customerMenu"; // Fallback to customer menu on error
+      updateDisplay();
+      console.error(err);
+    });
+}
+
+// NEW FUNCTION: Display products within a selected order for feedback
+function showProductsForFeedback(order) {
+  let ussdOutput = `Chagua bidhaa ya kutoa maoni kwa Agizo #${order.order_id}:\n`;
+  order.items.forEach((item, index) => {
+    ussdOutput += `${index + 1}. ${item.product_name} (x${item.quantity})\n`;
+  });
+  ussdOutput += "0. Rudi";
+  ussdInput = ussdOutput;
+  updateDisplay();
+}
+
+// NEW FUNCTION: Send feedback to backend
+function sendFeedback(feedbackText) {
+  let apiUrl = "";
+  let body = {};
+
+  if (selectedProductForFeedback) {
+    // Product feedback
+    apiUrl = "http://localhost:3001/api/feedback/product";
+    body = {
+      productId: selectedProductForFeedback.product_id,
+      customerId: selectedOrderForFeedback.customer_id, // Assuming customer_id is available in order object
+      orderId: selectedOrderForFeedback.order_id,
+      feedback: feedbackText
+    };
+  } else if (selectedOrderForFeedback) {
+    // Retailer feedback
+    apiUrl = "http://localhost:3001/api/feedback/retailer";
+    body = {
+      retailerId: selectedOrderForFeedback.retailer_id,
+      customerId: selectedOrderForFeedback.customer_id, // Assuming customer_id is available in order object
+      orderId: selectedOrderForFeedback.order_id,
+      feedback: feedbackText
+    };
+  } else {
+    ussdInput = "Kosa: Hakuna agizo au bidhaa iliyochaguliwa kutoa maoni.\n0. Rudi";
+    currentStep = "customerMenu";
+    updateDisplay();
+    return;
+  }
+
+  fetch(apiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+    .then(response => response.json())
+    .then(data => {
+      currentStep = "feedbackSuccess";
+      ussdInput = `Maoni yako yametumwa kikamilifu. Ahsante!\n\n0. Rudi`;
+      selectedOrderForFeedback = null;
+      selectedProductForFeedback = null;
+      updateDisplay();
+    })
+    .catch(err => {
+      ussdInput = "Kosa wakati wa kutuma maoni. Tafadhali jaribu tena.\n\n0. Rudi";
+      currentStep = "customerProvideFeedback"; // Allow retry
+      updateDisplay();
+      console.error(err);
+    });
+}
+
+
+// Retailer functionality
 function handleRetailerInput(userInput) {
   switch (currentStep) {
     case "retailerMenu":
@@ -635,12 +870,20 @@ function handleRetailerInput(userInput) {
           ussdInput = "Weka jina lako la mchuuzi ili uingie:";
           retailerDetails.nextAction = "viewOrders"; // Set next action after login
         }
+      } else if (userInput === "5") { // Angalia Mauzo ya Siku (View Daily Sales)
+        if (currentRetailerId) {
+          fetchDailySales();
+        } else {
+          currentStep = "retailerLoginName";
+          ussdInput = "Weka jina lako la mchuuzi ili uingie:";
+          retailerDetails.nextAction = "viewDailySales"; // Set next action after login
+        }
       } else if (userInput === "0") {
         currentStep = "start";
         ussdInput = "bofya *# kuanza";
         userRole = null;
       } else {
-        ussdInput = "Chaguo si sahihi. Weka 1, 2, 3, 4 au 0.";
+        ussdInput = "Chaguo si sahihi. Weka 1, 2, 3, 4, 5 au 0."; // Updated options
       }
       break;
 
@@ -669,153 +912,206 @@ function handleRetailerInput(userInput) {
 
     case "enterRetailerLocation":
       retailerDetails.location = userInput;
-      currentStep = "enterRetailerTin"; // New step to get TIN for registration
-      ussdInput = "Weka nambari yako ya TIN (Mfano: TIN-123456):";
+      currentStep = "enterRetailerTin"; // New: Ask for TIN
+      ussdInput = "Weka nambari yako ya TIN:";
       break;
 
-    case "enterRetailerTin": // New: Handle TIN input for registration
+    case "enterRetailerTin": // New: Handle TIN for registration
       retailerDetails.tinNumber = userInput;
       registerRetailer();
       break;
 
-    case "registrationSuccess":
-      if (userInput === "1") {
-        currentStep = "productMenu";
-        showProductMenu();
-      } else if (userInput === "2") {
-        currentStep = "start";
-        ussdInput = "bofya *# kuanza";
-        userRole = null;
-        currentRetailerId = null;
-      } else {
-        ussdInput = "Chaguo si sahihi. Weka 1 au 2.";
-      }
-      break;
-
     case "productMenu":
       if (userInput === "1") {
-        currentStep = "addProductName";
         productAction = "add";
+        currentStep = "addProductName";
         ussdInput = "Weka jina la bidhaa:";
       } else if (userInput === "2") {
+        productAction = "view";
         currentStep = "listProducts";
         fetchRetailerProducts();
       } else if (userInput === "0") {
-        currentStep = "retailerMenu";
-        ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+        retailerGoBack();
       } else {
-        ussdInput = "Chaguo si sahihi. Weka 1 au 2.";
+        ussdInput = "Chaguo si sahihi. Weka 1 kuongeza, 2 kuona, au 0 kurudi.";
       }
       break;
 
     case "addProductName":
-      retailerDetails.productName = userInput;
+      retailerDetails.newProductName = userInput;
       currentStep = "addProductPrice";
-      ussdInput = "Weka bei ya bidhaa (TSH):";
+      ussdInput = `Weka bei ya ${retailerDetails.newProductName}:`;
       break;
 
     case "addProductPrice":
-      retailerDetails.productPrice = userInput;
-      addProduct();
+      const price = parseFloat(userInput);
+      if (!isNaN(price) && price > 0) {
+        retailerDetails.newProductPrice = price;
+        addProduct();
+      } else {
+        ussdInput = "Bei si sahihi. Tafadhali weka nambari chanya.";
+      }
       break;
 
     case "listProducts":
-      const productIndex = parseInt(userInput) - 1;
-      if (!isNaN(productIndex) && productIndex >= 0 && productIndex < products.length) {
+      const productActionIndex = parseInt(userInput) - 1;
+      if (!isNaN(productActionIndex) && productActionIndex >= 0 && productActionIndex < products.length) {
+        retailerDetails.selectedProduct = products[productActionIndex];
         currentStep = "productAction";
-        retailerDetails.selectedProduct = products[productIndex];
-        ussdInput = `Bidhaa: ${products[productIndex].product_name}\n1. Badili\n2. Futa\n0. Rudi`;
+        ussdInput = `Bidhaa: ${retailerDetails.selectedProduct.product_name}\n1. Badili\n2. Futa\n0. Rudi`;
       } else if (userInput === "0") {
-        currentStep = "productMenu";
-        showProductMenu();
+        retailerGoBack();
       } else {
-        ussdInput = "Chaguo si sahihi. Tafadhali jaribu tena.";
+        ussdInput = "Chaguo si sahihi. Tafadhali chagua nambari ya bidhaa au 0 kurudi.";
       }
       break;
 
     case "productAction":
       if (userInput === "1") {
         currentStep = "editProductName";
-        productAction = "edit";
         ussdInput = `Badili jina (sasa: ${retailerDetails.selectedProduct.product_name}):`;
       } else if (userInput === "2") {
         deleteProduct();
       } else if (userInput === "0") {
-        currentStep = "productMenu";
-        showProductMenu();
+        retailerGoBack();
       } else {
-        ussdInput = "Chaguo si sahihi. Weka 1, 2 au 0.";
+        ussdInput = "Chaguo si sahihi. Weka 1 kubadili, 2 kufuta, au 0 kurudi.";
       }
       break;
 
     case "editProductName":
       retailerDetails.newProductName = userInput;
       currentStep = "editProductPrice";
-      ussdInput = `Badili bei (sasa: ${retailerDetails.selectedProduct.product_cost}):`;
+      ussdInput = `Badili bei (sasa: TSH ${retailerDetails.selectedProduct.product_cost}):`;
       break;
 
     case "editProductPrice":
-      retailerDetails.newProductPrice = userInput;
-      updateProduct();
+      const newPrice = parseFloat(userInput);
+      if (!isNaN(newPrice) && newPrice > 0) {
+        retailerDetails.newProductPrice = newPrice;
+        editProduct();
+      } else {
+        ussdInput = "Bei si sahihi. Tafadhali weka nambari chanya.";
+      }
       break;
 
-    case "editRetailerName": // New: For editing retailer details
+    case "ordersList": // This state is reached after fetching orders
+      if (userInput === "0") {
+        retailerGoBack(); // Go back to retailer menu
+      } else {
+        // If a number is entered, try to select that order for action
+        const orderIndex = parseInt(userInput) - 1;
+        if (!isNaN(orderIndex) && orderIndex >= 0 && orderIndex < orders.length) {
+          selectedOrder = orders[orderIndex]; // Store the selected order
+          currentStep = "orderAction";
+          ussdInput = `Agizo #${selectedOrder.order_id}:\n
+  Jina: ${selectedOrder.customer_name}
+  Simu: ${selectedOrder.phone_number}
+  Eneo: ${selectedOrder.location}
+  Hali: ${selectedOrder.order_status}\n
+  Bidhaa:\n`;
+          selectedOrder.items.forEach(item => {
+            ussdInput += `- ${item.product_name} (x${item.quantity}) - TSH ${item.item_price * item.quantity}\n`;
+          });
+          ussdInput += `\n1. Kubali Agizo\n2. Kataa Agizo\n3. Kamilisha Agizo\n0. Rudi`;
+        } else {
+          ussdInput = "Chaguo si sahihi. Weka nambari ya agizo au 0 kurudi.";
+        }
+      }
+      break;
+
+    case "selectOrderToActOn": // If a search was performed and list is displayed
+      const selectedOrderIndex = parseInt(userInput) - 1;
+      if (!isNaN(selectedOrderIndex) && selectedOrderIndex >= 0 && selectedOrderIndex < orders.length) {
+        selectedOrder = orders[selectedOrderIndex];
+        currentStep = "orderAction";
+        ussdInput = `Agizo #${selectedOrder.order_id}:\n
+  Jina: ${selectedOrder.customer_name}
+  Simu: ${selectedOrder.phone_number}
+  Eneo: ${selectedOrder.location}
+  Hali: ${selectedOrder.order_status}\n
+  Bidhaa:\n`;
+        selectedOrder.items.forEach(item => {
+          ussdInput += `- ${item.product_name} (x${item.quantity}) - TSH ${item.item_price * item.quantity}\n`;
+        });
+        ussdInput += `\n1. Kubali Agizo\n2. Kataa Agizo\n3. Kamilisha Agizo\n0. Rudi`;
+      } else if (userInput === "0") {
+        retailerGoBack(); // Go back to retailer menu
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka nambari ya agizo au 0 kurudi.";
+      }
+      break;
+
+
+    case "orderAction":
+      if (!selectedOrder) {
+        ussdInput = "Hakuna agizo lililochaguliwa. Tafadhali rudi kwenye orodha ya maagizo.\n0. Rudi";
+        currentStep = "ordersList"; // Fallback
+        break;
+      }
+      if (userInput === "1") {
+        updateOrderStatus(selectedOrder.order_id, 'agizo limekubaliwa'); // Accept
+      } else if (userInput === "2") {
+        updateOrderStatus(selectedOrder.order_id, 'agizo limekataliwa'); // Reject
+      } else if (userInput === "3") {
+        updateOrderStatus(selectedOrder.order_id, 'agizo limekamilika'); // Complete
+      } else if (userInput === "0") {
+        retailerGoBack(); // Go back to orders list
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 1 kukubali, 2 kukataa, 3 kukamilisha, au 0 kurudi.";
+      }
+      break;
+
+    case "retailerRegistrationSuccess":
+      if (userInput === "0") {
+        retailerGoBack(); // Go back to main menu
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 0 kurudi.";
+      }
+      break;
+
+    case "retailerLoginSuccess":
+      if (userInput === "0") {
+        retailerGoBack(); // Go back to main menu
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 0 kurudi.";
+      }
+      break;
+
+    case "editRetailerName":
       retailerDetails.name = userInput;
       currentStep = "editRetailerPhone";
       ussdInput = `Badili nambari ya simu (sasa: ${retailerDetails.phoneNumber}):`;
       break;
 
-    case "editRetailerPhone": // New: For editing retailer details
+    case "editRetailerPhone":
       retailerDetails.phoneNumber = userInput;
       currentStep = "editRetailerLocation";
       ussdInput = `Badili eneo (sasa: ${retailerDetails.location}):`;
       break;
 
-    case "editRetailerLocation": // New: For editing retailer details
+    case "editRetailerLocation":
       retailerDetails.location = userInput;
       currentStep = "editRetailerTin"; // New: Edit TIN
-      ussdInput = `Badili nambari ya TIN (sasa: ${retailerDetails.tinNumber}):`; // New prompt
+      ussdInput = `Badili nambari ya TIN (sasa: ${retailerDetails.tinNumber}):`;
       break;
 
-    case "editRetailerTin": // New: For editing retailer TIN
+    case "editRetailerTin": // New: Handle editing TIN
       retailerDetails.tinNumber = userInput;
       updateRetailerDetails();
       break;
 
-    case "selectOrderToActOn": // New: Select an order to approve/reject
-      const orderIndex = parseInt(userInput) - 1;
-      if (!isNaN(orderIndex) && orderIndex >= 0 && orderIndex < orders.length) {
-        selectedOrder = orders[orderIndex];
-        currentStep = "orderAction";
-        // Construct product summary for display in order action
-        let productSummaryForAction = selectedOrder.items.map(item => `${item.product_name} (x${item.quantity}) - TSH ${item.product_cost}`).join(', ');
-        ussdInput = `Agizo #${selectedOrder.order_id} - ${selectedOrder.customer_name}\nBidhaa: ${productSummaryForAction}\nHali ya sasa: ${selectedOrder.order_status}\n\n1. Pitisha\n2. Kataa\n0. Rudi`;
-      } else if (userInput === "0") {
-        currentStep = "retailerMenu";
-        ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
-      } else {
-        ussdInput = "Chaguo si sahihi. Tafadhali weka nambari ya agizo au 0 kurudi.";
-      }
-      break;
-
-    case "orderAction": // New: Approve or Reject
-      if (userInput === "1") {
-        updateOrderStatus('agizo limepitishwa');
-      } else if (userInput === "2") {
-        updateOrderStatus('rejected');
-      } else if (userInput === "0") {
-        selectedOrder = null; // Clear selected order
-        currentStep = "ordersList"; // Go back to ordersList after action, prompting for "0. Rudi"
-        fetchRetailerOrders(""); // Re-fetch orders to show updated status immediately
-      } else {
-        ussdInput = "Chaguo si sahihi. Weka 1 Pitisha, 2 Kataa, au 0 Rudi.";
-      }
-      break;
-
-    case "ordersList": // This state is for when no orders are found, or after an action when we display "0. Rudi"
+    case "retailerUpdateSuccess":
       if (userInput === "0") {
-        currentStep = "retailerMenu";
-        ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
+        retailerGoBack();
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 0 kurudi.";
+      }
+      break;
+
+    case "viewDailySales": // NEW: Handle input from daily sales view
+      if (userInput === "0") {
+        retailerGoBack(); // Go back to retailer menu
       } else {
         ussdInput = "Chaguo si sahihi. Weka 0 kurudi.";
       }
@@ -827,8 +1123,9 @@ function handleRetailerInput(userInput) {
   }
 }
 
+
 function showProductMenu() {
-  ussdInput = "Usimamizi wa Bidhaa:\n1. Ongeza Bidhaa\n2. Tazama/Badili Bidhaa\n0. Rudi";
+  ussdInput = "Menyu ya Bidhaa:\n1. Ongeza Bidhaa Mpya\n2. Tazama Bidhaa Zangu\n0. Rudi";
   updateDisplay();
 }
 
@@ -840,106 +1137,120 @@ function registerRetailer() {
       name: retailerDetails.name,
       phoneNumber: retailerDetails.phoneNumber,
       location: retailerDetails.location,
-      tinNumber: retailerDetails.tinNumber // Added TIN to registration
-    })
+      tinNumber: retailerDetails.tinNumber // Include TIN in registration
+    }),
   })
     .then(response => response.json())
     .then(data => {
-      currentRetailerId = data.retailerId;
-      ussdInput = `Usajili umefanikiwa!\n
-Nambari ya Mfanyabiashara: ${data.retailerId}
-Jina: ${retailerDetails.name}
-Simu: ${retailerDetails.phoneNumber}
-Eneo: ${retailerDetails.location}
-TIN: ${retailerDetails.tinNumber}\n
-Chagua:\n1. Duka la Bidhaa\n2. Maliza`;
-      currentStep = "registrationSuccess";
-      resetRetailerButKeepId();
+      if (data.error) {
+        ussdInput = `Kosa: ${data.error}\n0. Rudi`;
+        currentStep = "enterRetailerTin"; // Stay on this step to allow retry
+      } else {
+        currentRetailerId = data.retailerId; // Store the ID for future use
+        currentStep = "retailerRegistrationSuccess";
+        ussdInput = `Umefanikiwa kusajiliwa kama ${retailerDetails.name}. Karibu!\n0. Rudi`;
+        // Clear registration details
+        retailerDetails.name = "";
+        retailerDetails.phoneNumber = "";
+        retailerDetails.location = "";
+        retailerDetails.tinNumber = "";
+      }
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa wakati wa kusajili. Tafadhali jaribu tena.";
+      ussdInput = "Kosa wakati wa kusajili. Tafadhali jaribu tena.\n0. Rudi";
+      currentStep = "enterRetailerTin"; // Stay on this step to allow retry
       updateDisplay();
       console.error(err);
     });
 }
 
-// New function for retailer login
 function retailerLogin() {
   fetch("http://localhost:3001/api/retailers/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: retailerDetails.loginName,
-      tinNumber: retailerDetails.loginTin // Changed from retailerId to tinNumber
-    })
+      tinNumber: retailerDetails.loginTin // Send TIN for login
+    }),
   })
     .then(response => response.json())
     .then(data => {
       if (data.success) {
         currentRetailerId = data.retailer.retailer_id;
-        retailerDetails.name = data.retailer.name; // Store retailer name for edit
-        retailerDetails.phoneNumber = data.retailer.phone_number; // Store retailer phone for edit
-        retailerDetails.location = data.retailer.location; // Store retailer location for edit
-        retailerDetails.tinNumber = data.retailer.tin_number; // Store retailer TIN for edit
-        loginAttempts = 0; // Reset attempts on successful login
-        ussdInput = "Umeingia kwa mafanikio!\n\nMenyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n0. Rudi";
-        currentStep = "retailerMenu";
+        retailerDetails.name = data.retailer.name;
+        retailerDetails.phoneNumber = data.retailer.phone_number;
+        retailerDetails.location = data.retailer.location;
+        retailerDetails.tinNumber = data.retailer.tin_number;
 
-        // Redirect to the intended action after login if set
-        if (retailerDetails.nextAction === "editRegistration") {
-          fetchRetailerDetailsForEdit();
-          retailerDetails.nextAction = ""; // Clear the action
-        } else if (retailerDetails.nextAction === "viewOrders") {
-          fetchRetailerOrders(""); // Call fetcher directly
-          retailerDetails.nextAction = ""; // Clear the action
+        ussdInput = `Karibu ${retailerDetails.name}!\n0. Rudi`;
+        currentStep = "retailerLoginSuccess";
+        // Perform next action if set (e.g., view orders, edit registration)
+        if (retailerDetails.nextAction === "viewOrders") {
+          fetchRetailerOrders("");
+          retailerDetails.nextAction = null; // Clear action
+        } else if (retailerDetails.nextAction === "editRegistration") {
+          fetchRetailerDetailsForEdit(); // Directly go to edit
+          retailerDetails.nextAction = null; // Clear action
+        } else if (retailerDetails.nextAction === "viewDailySales") {
+          fetchDailySales();
+          retailerDetails.nextAction = null; // Clear action
+        }
+        else {
+          // Default to product menu or main retailer menu if no specific action
+          currentStep = "retailerMenu";
+          ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi";
         }
       } else {
         loginAttempts++;
         if (loginAttempts >= 3) {
-          ussdInput = "Jaribio nyingi za kuingia. Tafadhali jaribu tena baadaye.\n\n0. Rudi";
-          currentStep = "retailerMenu"; // Go back to main menu
-          currentRetailerId = null; // Clear ID to force re-login
+          ussdInput = "Umejitaidi mara nyingi. Tafadhali wasiliana na msimamizi. \n0. Rudi";
+          currentStep = "retailerMenu"; // Go back to main menu after too many attempts
+          loginAttempts = 0; // Reset
         } else {
-          ussdInput = `Jina au Nambari ya TIN si sahihi. Jaribu tena. (Jaribio ${loginAttempts}/3)\n\nWeka jina lako la mchuuzi:`;
-          currentStep = "retailerLoginName";
+          ussdInput = `Kosa: ${data.error} Jaribu tena. (Majaribio: ${loginAttempts}/3)\nWeka jina lako la mchuuzi:`;
+          currentStep = "retailerLoginName"; // Keep on login step
+          retailerDetails.loginName = ""; // Clear name for retry
+          retailerDetails.loginTin = ""; // Clear TIN for retry
         }
       }
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa la mtandao au seva. Tafadhali jaribu tena.";
-      currentStep = "retailerMenu"; // Fallback to retailer menu on error
+      ussdInput = "Kosa la mtandao wakati wa kuingia. Tafadhali jaribu tena.\n0. Rudi";
+      currentStep = "retailerMenu";
       updateDisplay();
       console.error(err);
     });
 }
 
-// New function to fetch retailer details for editing
 function fetchRetailerDetailsForEdit() {
-  if (!currentRetailerId) {
-    ussdInput = "Tafadhali ingia kwanza.";
-    currentStep = "retailerLoginName";
-    updateDisplay();
-    return;
-  }
-  // We'll pre-fill with the currently stored retailerDetails after login.
-  // In a real application, you might fetch these from the server.
-  ussdInput = `Badili Usajili:\n
-Jina (sasa: ${retailerDetails.name || 'N/A'}):`;
-  currentStep = "editRetailerName";
-  updateDisplay();
+  // Assuming currentRetailerId is already set from login
+  fetch(`http://localhost:3001/api/retailers/${currentRetailerId}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.retailer) {
+        retailerDetails.name = data.retailer.name;
+        retailerDetails.phoneNumber = data.retailer.phone_number;
+        retailerDetails.location = data.retailer.location;
+        retailerDetails.tinNumber = data.retailer.tin_number; // Populate TIN
+        currentStep = "editRetailerName";
+        ussdInput = `Badili jina (sasa: ${retailerDetails.name}):`;
+      } else {
+        ussdInput = "Kosa wakati wa kupata maelezo ya mfanyabiashara. Tafadhali jaribu tena.\n0. Rudi";
+        currentStep = "retailerMenu";
+      }
+      updateDisplay();
+    })
+    .catch(err => {
+      ussdInput = "Kosa la mtandao wakati wa kupata maelezo. Tafadhali jaribu tena.\n0. Rudi";
+      currentStep = "retailerMenu";
+      updateDisplay();
+      console.error(err);
+    });
 }
 
-// New function to update retailer details
 function updateRetailerDetails() {
-  if (!currentRetailerId) {
-    ussdInput = "Tafadhali ingia kwanza.";
-    currentStep = "retailerLoginName";
-    updateDisplay();
-    return;
-  }
-
   fetch(`http://localhost:3001/api/retailers/${currentRetailerId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -947,261 +1258,241 @@ function updateRetailerDetails() {
       name: retailerDetails.name,
       phoneNumber: retailerDetails.phoneNumber,
       location: retailerDetails.location,
-      tinNumber: retailerDetails.tinNumber // Added TIN to update
-    })
+      tinNumber: retailerDetails.tinNumber // Include TIN in update
+    }),
   })
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        ussdInput = `Maelezo ya usajili yamebadilishwa kikamilifu!\n
-Jina: ${retailerDetails.name}
-Simu: ${retailerDetails.phoneNumber}
-Eneo: ${retailerDetails.location}
-TIN: ${retailerDetails.tinNumber}\n
-0. Rudi`;
-        currentStep = "retailerMenu"; // Go back to main retailer menu
+        ussdInput = "Maelezo yako yamebadilishwa kikamilifu. Ahsante!\n0. Rudi";
+        currentStep = "retailerUpdateSuccess";
       } else {
-        ussdInput = "Kosa wakati wa kubadilisha maelezo. Tafadhali jaribu tena.";
-        currentStep = "retailerMenu"; // Go back to main retailer menu
+        ussdInput = `Kosa: ${data.error}\n0. Rudi`;
+        currentStep = "editRetailerTin"; // Stay on edit step if error
       }
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa la mtandao au seva wakati wa kubadilisha maelezo. Tafadhali jaribu tena.";
-      currentStep = "retailerMenu"; // Fallback
-      updateDisplay();
-      console.error(err);
-    });
-}
-
-function resetRetailerButKeepId() {
-  currentInput = "";
-  retailerDetails = {
-    name: "",
-    phoneNumber: "",
-    location: "",
-    productName: "",
-    productPrice: "",
-    selectedProduct: null,
-    newProductName: "",
-    newProductPrice: "",
-    loginName: "",
-    loginTin: "", // Reset loginTin
-    tinNumber: "" // Reset tinNumber for registration
-  };
-}
-
-function fetchRetailerProducts() {
-  if (!currentRetailerId) {
-    ussdInput = "Tafadhali ingia kwanza.";
-    currentStep = "retailerLoginName";
-    updateDisplay();
-    return;
-  }
-
-  fetch(`http://localhost:3001/api/products/${currentRetailerId}`)
-    .then(response => response.json())
-    .then(data => {
-      products = data;
-      if (products.length === 0) {
-        ussdInput = "Hakuna bidhaa zilizopatikana.\n1. Ongeza Bidhaa\n0. Rudi";
-        currentStep = "productMenu";
-      } else {
-        ussdInput = "Chagua bidhaa kusimamia:\n";
-        products.forEach((product, index) => {
-          ussdInput += `${index + 1}. ${product.product_name} - TSH ${product.product_cost}\n`;
-        });
-        ussdInput += "0. Rudi";
-        currentStep = "listProducts";
-      }
-      updateDisplay();
-    })
-    .catch(err => {
-      ussdInput = "Kosa wakati wa kupata bidhaa";
+      ussdInput = "Kosa la mtandao wakati wa kubadili maelezo. Tafadhali jaribu tena.\n0. Rudi";
+      currentStep = "editRetailerTin"; // Stay on edit step
       updateDisplay();
       console.error(err);
     });
 }
 
 function addProduct() {
-  if (!currentRetailerId) {
-    ussdInput = "Tafadhani ingia kwanza.";
-    currentStep = "retailerLoginName";
-    updateDisplay();
-    return;
-  }
-
   fetch("http://localhost:3001/api/products", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      name: retailerDetails.productName,
-      price: retailerDetails.productPrice,
-      retailerId: currentRetailerId
-    })
+      name: retailerDetails.newProductName,
+      price: retailerDetails.newProductPrice,
+      retailerId: currentRetailerId,
+    }),
   })
     .then(response => response.json())
     .then(data => {
-      ussdInput = `Bidhaa imeongezwa kikamilifu!\n
-Nambari ya Bidhaa: ${data.productId}
-Jina: ${retailerDetails.productName}
-Bei: TSH ${retailerDetails.productPrice}\n
-Bidhaa sasa inapatikana kwa wateja.\n
-0. Rudi`;
-      currentStep = "productMenu";
-      retailerDetails.productName = "";
-      retailerDetails.productPrice = "";
+      ussdInput = `Bidhaa "${retailerDetails.newProductName}" imeongezwa. \n0. Rudi`;
+      currentStep = "productMenu"; // Go back to product menu after adding
+      retailerDetails.newProductName = ""; // Clear for next input
+      retailerDetails.newProductPrice = "";
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa wakati wa kuongeza bidhaa. Tafadhali jaribu tena.";
+      ussdInput = "Kosa wakati wa kuongeza bidhaa. Tafadhali jaribu tena.\n0. Rudi";
       updateDisplay();
       console.error(err);
     });
 }
 
-function updateProduct() {
-  if (!currentRetailerId) {
-    ussdInput = "Tafadhali ingia kwanza.";
-    currentStep = "retailerLoginName";
-    updateDisplay();
-    return;
-  }
+function fetchRetailerProducts() {
+  fetch(`http://localhost:3001/api/products/${currentRetailerId}`)
+    .then(response => response.json())
+    .then(data => {
+      products = data;
+      let ussdOutput = "Bidhaa zako:\n";
+      if (products.length === 0) {
+        ussdOutput += "Hakuna bidhaa zilizopatikana. Weka 1 kuongeza bidhaa.";
+      } else {
+        products.forEach((product, index) => {
+          ussdOutput += `${index + 1}. ${product.product_name} - TSH ${product.product_cost}\n`;
+        });
+        ussdOutput += "\nChagua nambari ya bidhaa kubadili/kufuta, au 0 kurudi.";
+      }
+      ussdInput = ussdOutput;
+      updateDisplay();
+    })
+    .catch(err => {
+      ussdInput = "Kosa wakati wa kupata bidhaa zako. Tafadhali jaribu tena.\n0. Rudi";
+      updateDisplay();
+      console.error(err);
+    });
+}
 
+function editProduct() {
   fetch(`http://localhost:3001/api/products/${retailerDetails.selectedProduct.product_id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: retailerDetails.newProductName,
-      price: retailerDetails.newProductPrice
-    })
+      price: retailerDetails.newProductPrice,
+    }),
   })
     .then(response => response.json())
     .then(data => {
-      ussdInput = `Bidhaa imebadilishwa kikamilifu!\n
-Nambari ya Bidhaa: ${retailerDetails.selectedProduct.product_id}
-Jina Jipya: ${retailerDetails.newProductName}
-Bei Jipya: TSH ${retailerDetails.newProductPrice}\n
-Mabadiliko yanaonekana kwa wateja.\n
-0. Rudi`;
-      currentStep = "productMenu";
+      ussdInput = `Bidhaa "${retailerDetails.selectedProduct.product_name}" imebadilishwa.\n0. Rudi`;
+      currentStep = "productMenu"; // Go back to product menu
       retailerDetails.selectedProduct = null;
       retailerDetails.newProductName = "";
       retailerDetails.newProductPrice = "";
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa wakati wa kusahihisha bidhaa. Tafadhali jaribu tena.";
+      ussdInput = "Kosa wakati wa kubadili bidhaa. Tafadhali jaribu tena.\n0. Rudi";
       updateDisplay();
       console.error(err);
     });
 }
 
 function deleteProduct() {
-  if (!currentRetailerId) {
-    ussdInput = "Tafadhali ingia kwanza.";
-    currentStep = "retailerLoginName";
-    updateDisplay();
-    return;
-  }
-
   fetch(`http://localhost:3001/api/products/${retailerDetails.selectedProduct.product_id}`, {
-    method: "DELETE"
+    method: "DELETE",
   })
     .then(response => response.json())
     .then(data => {
-      ussdInput = `Bidhaa imefutwa kikamilifu!\n
-Bidhaa: ${retailerDetails.selectedProduct.product_name}
-Bei: TSH ${retailerDetails.selectedProduct.product_cost}\n
-Bidhaa sasa haipatikani kwa wateja.\n
-0. Rudi`;
-      currentStep = "productMenu";
+      ussdInput = `Bidhaa "${retailerDetails.selectedProduct.product_name}" imefutwa.\n0. Rudi`;
+      currentStep = "productMenu"; // Go back to product menu
       retailerDetails.selectedProduct = null;
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa wakati wa kufuta bidhaa. Tafadhali jaribu tena.";
+      ussdInput = "Kosa wakati wa kufuta bidhaa. Tafadhali jaribu tena.\n0. Rudi";
       updateDisplay();
       console.error(err);
     });
 }
 
-// Function to fetch retailer orders
-function fetchRetailerOrders(customerName = "") {
-  if (!currentRetailerId) {
-    ussdInput = "Tafadhali ingia kwanza.";
-    currentStep = "retailerLoginName";
-    updateDisplay();
-    return;
-  }
-
+// Function to fetch orders for a retailer
+function fetchRetailerOrders(customerNameFilter) {
   let url = `http://localhost:3001/api/retailers/${currentRetailerId}/orders`;
-  if (customerName) {
-    url += `?customerName=${encodeURIComponent(customerName)}`;
+  if (customerNameFilter) {
+    url += `?customerName=${encodeURIComponent(customerNameFilter)}`;
   }
 
   fetch(url)
     .then(response => response.json())
     .then(data => {
       orders = data;
-      ussdInput = "Maagizo:\n";
+      let ussdOutput = "Maagizo Yako:\n";
       if (orders.length === 0) {
-        ussdInput += "Hakuna maagizo yaliyopatikana.";
-        ussdInput += "\n0. Rudi";
-        currentStep = "ordersList"; // Still ordersList, but no actions
+        ussdOutput += "Hakuna maagizo yaliyopatikana.";
       } else {
-        orders.forEach((order, index) => {
-          let productSummary = order.items.map(item => `${item.product_name} (x${item.quantity}) - TSH ${item.product_cost}`).join(', '); //
-          ussdInput += `${index + 1}. Jina: ${order.customer_name}, Simu: ${order.phone_number}, Bidhaa: ${productSummary}, Eneo: ${order.location}, Hali: ${order.order_status}\n`; //
+        // Group orders by order_id
+        const groupedOrders = {};
+        data.forEach(item => {
+          if (!groupedOrders[item.order_id]) {
+            groupedOrders[item.order_id] = {
+              order_id: item.order_id,
+              customer_name: item.customer_name,
+              phone_number: item.phone_number,
+              location: item.location,
+              order_status: item.order_status,
+              created_at: item.created_at,
+              items: []
+            };
+          }
+          groupedOrders[item.order_id].items.push({
+            product_name: item.product_name,
+            quantity: item.quantity,
+            item_price: parseFloat(item.item_price) // Ensure price is parsed as float
+          });
         });
-        ussdInput += "\nChagua agizo (nambari) kulichukulia hatua, au 0 kurudi.";
-        currentStep = "selectOrderToActOn"; // New step to select order
+
+        // Display each order
+        Object.values(groupedOrders).forEach((order, index) => {
+          const total = order.items.reduce((sum, item) => sum + (item.item_price * item.quantity), 0);
+          ussdOutput += `\n${index + 1}. Agizo #${order.order_id}\n`;
+          ussdOutput += `  Mteja: ${order.customer_name}\n`;
+          ussdOutput += `  Simu: ${order.phone_number}\n`;
+          ussdOutput += `  Hali: ${order.order_status}\n`;
+          ussdOutput += `  Jumla: TSH ${total.toFixed(0)}\n`; // Format to 0 decimal places
+        });
       }
+      ussdOutput += "\nChagua nambari ya agizo kuchagua au 0 kurudi.";
+      ussdInput = ussdOutput;
+      currentStep = "ordersList"; // Changed from "selectOrderToActOn"
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa wakati wa kupata maagizo. Tafadhali jaribu tena.";
+      ussdInput = "Kosa wakati wa kupata maagizo. Tafadhali jaribu tena.\n0. Rudi";
+      currentStep = "retailerMenu";
       updateDisplay();
       console.error(err);
     });
 }
-
-// New function to update order status (approve/reject)
-function updateOrderStatus(status) {
-  if (!currentRetailerId || !selectedOrder) {
-    ussdInput = "Kosa: Hakuna agizo au mchuuzi aliyeingia.";
-    currentStep = "retailerMenu";
-    updateDisplay();
-    return;
-  }
-
-  fetch(`http://localhost:3001/api/orders/${selectedOrder.order_id}/status`, {
+// Function to update order status (accept, reject, complete)
+function updateOrderStatus(orderId, status) {
+  fetch(`http://localhost:3001/api/orders/${orderId}/status`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: status })
+    body: JSON.stringify({ status: status }),
   })
     .then(response => response.json())
     .then(data => {
-      if (data.success) {
-        ussdInput = `Agizo #${selectedOrder.order_id} limesasishwa kuwa: ${status === 'agizo limepitishwa' ? 'Imepitishwa' : 'Limekataliwa'}\n\n0. Rudi`;
-        selectedOrder = null; // Clear selected order
-        currentStep = "ordersList"; // Go back to ordersList after action, prompting for "0. Rudi"
-        fetchRetailerOrders(""); // Re-fetch orders to show updated status immediately
-      } else {
-        ussdInput = `Kosa: ${data.error || 'Imeshindikana kusasisha hali ya agizo.'}\n\n0. Rudi`;
-        currentStep = "ordersList";
-        fetchRetailerOrders(""); // Attempt to re-fetch
-      }
+      ussdInput = `Hali ya agizo #${orderId} imebadilishwa kuwa: ${status.toUpperCase()}\n0. Rudi`;
+      currentStep = "ordersList"; // Go back to orders list
+      fetchRetailerOrders(""); // Refresh the list
+      selectedOrder = null; // Clear selected order
       updateDisplay();
     })
     .catch(err => {
-      ussdInput = "Kosa la mtandao au seva wakati wa kusasisha hali ya agizo. Tafadhali jaribu tena.\n\n0. Rudi";
-      currentStep = "ordersList";
+      ussdInput = "Kosa wakati wa kubadili hali ya agizo. Tafadhali jaribu tena.\n0. Rudi";
       updateDisplay();
       console.error(err);
     });
 }
 
+function fetchDailySales() {
+  const today = new Date().toISOString().split('T')[0];
+
+  fetch(`http://localhost:3001/api/retailers/${currentRetailerId}/daily-sales?date=${today}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      let ussdOutput = `Mauzo ya Leo (${today}):\n`;
+
+      if (data.overallSales && data.overallSales.total_sales) {
+        ussdOutput += `\nJumla ya Mauzo: TSH ${data.overallSales.total_sales.toFixed(0)}\n`;
+        ussdOutput += `Jumla ya Maagizo: ${data.overallSales.total_orders}\n`;
+      } else {
+        ussdOutput += "\nHakuna mauzo yaliyopatikana kwa leo.\n";
+      }
+
+      if (data.productSales && data.productSales.length > 0) {
+        ussdOutput += "\nMauzo ya Bidhaa:\n";
+        data.productSales.forEach(product => {
+          ussdOutput += `- ${product.product_name}: ${product.quantity_sold} (TSH ${product.total_product_cost.toFixed(0)})\n`;
+        });
+      } else {
+        ussdOutput += "\nHakuna mauzo ya bidhaa yaliyopatikana kwa leo.\n";
+      }
+
+      ussdOutput += "\n0. Rudi";
+      ussdInput = ussdOutput;
+      currentStep = "viewDailySales";
+      updateDisplay();
+    })
+    .catch(err => {
+      console.error('Error fetching daily sales:', err);
+      ussdInput = "Kosa wakati wa kupata mauzo ya siku. Tafadhali jaribu tena.\n\n0. Rudi";
+      currentStep = "retailerMenu";
+      updateDisplay();
+    });
+}
 
 function resetRetailer() {
   currentStep = "start";
@@ -1244,14 +1535,11 @@ document.addEventListener('keydown', function (event) {
     cycleInput('#');
   } else if (key === ' ') {
     cycleInput(' ');
-  } else if (key === 'Backspace' || key === 'Delete') {
+  } else if (key === 'Backspace') {
     deleteInput();
   } else if (key === 'Enter') {
     sendInput();
-  } else if (key === 'Escape') {
+  } else if (key === 'ArrowLeft') {
     goBack();
   }
 });
-
-// Initialize
-updateDisplay();

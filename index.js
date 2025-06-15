@@ -1,5 +1,5 @@
 const express = require('express');
-const mysql = require('mysql2'); // mysql2 supports promises, which is good
+const mysql = require('mysql2');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
@@ -16,15 +16,16 @@ const db = mysql.createConnection({
   host: 'localhost',
   user: 'root',
   password: '', // Weka password yako ya MySQL hapa ikiwa ipo
-  database: 'ussd_db'
+  database: 'ussd_db',
+  multipleStatements: true // Essential for daily-sales endpoint
 });
 
 db.connect(err => {
   if (err) {
-    console.error(' Kosa katika kuungana na database:', err.message);
+    console.error('Kosa katika kuungana na database:', err.message);
     return;
   }
-  console.log(' Imefanikiwa kuungana na database');
+  console.log('Imefanikiwa kuungana na database');
 });
 
 // Serve frontend (index.html)
@@ -34,77 +35,120 @@ app.get('/', (req, res) => {
 
 // Get all retailers
 app.get('/api/retailers', (req, res) => {
-  db.query('SELECT * FROM retailers', (err, results) => {
+  db.query('SELECT retailer_id, name, phone_number, location, tin_number FROM retailers', (err, results) => {
     if (err) {
-      console.error(' Kosa katika kupata wachuuzi:', err.message);
+      console.error('Kosa katika kupata wachuuzi:', err.message);
       return res.status(500).json({ error: 'Imeshindikana kupata wachuuzi.' });
     }
     res.json(results);
   });
 });
 
-// Add a new retailer (registration)
+// Register a new retailer
 app.post('/api/retailers', (req, res) => {
   const { name, phoneNumber, location, tinNumber } = req.body;
-  db.query(
-    'INSERT INTO retailers (name, phone_number, location, tin_number) VALUES (?, ?, ?, ?)',
-    [name, phoneNumber, location, tinNumber],
-    (err, result) => {
-      if (err) {
-        console.error(' Kosa katika kusajili mchuuzi:', err.message);
-        return res.status(500).json({ error: 'Imeshindikana kusajili mchuuzi.' });
-      }
-      res.status(201).json({ message: 'Mfanyabiashara amesajiliwa kikamilifu!', retailerId: result.insertId });
+
+  if (!name || !phoneNumber || !location || !tinNumber) {
+    return res.status(400).json({ error: 'Tafadhali jaza taarifa zote muhimu: jina, nambari ya simu, eneo, na TIN.' });
+  }
+
+  // Check if retailer with same name or TIN already exists
+  db.query('SELECT * FROM retailers WHERE name = ? OR tin_number = ?', [name, tinNumber], (err, results) => {
+    if (err) {
+      console.error('Kosa wakati wa kuangalia mfanyabiashara:', err.message);
+      return res.status(500).json({ error: 'Imeshindikana kusajili mfanyabiashara.' });
     }
-  );
+    if (results.length > 0) {
+      if (results[0].name === name) {
+        return res.status(409).json({ error: 'Jina la mfanyabiashara tayari lipo.' });
+      }
+      if (results[0].tin_number === tinNumber) {
+        return res.status(409).json({ error: 'Nambari ya TIN tayari imesajiliwa.' });
+      }
+    }
+
+    db.query(
+      'INSERT INTO retailers (name, phone_number, location, tin_number) VALUES (?, ?, ?, ?)',
+      [name, phoneNumber, location, tinNumber],
+      (err, result) => {
+        if (err) {
+          console.error('Kosa katika kusajili mfanyabiashara:', err.message);
+          return res.status(500).json({ error: 'Imeshindikana kusajili mfanyabiashara.' });
+        }
+        res.status(201).json({ message: 'Mfanyabiashara amesajiliwa kikamilifu!', retailerId: result.insertId });
+      }
+    );
+  });
 });
 
-// Retailer Login - Modified to use name and tin_number
+// Retailer login
 app.post('/api/retailers/login', (req, res) => {
   const { name, tinNumber } = req.body;
-  db.query(
-    'SELECT retailer_id, name, tin_number, phone_number, location FROM retailers WHERE name = ? AND tin_number = ?', // Added phone_number, location for edit
-    [name, tinNumber],
-    (err, results) => {
-      if (err) {
-        console.error(' Kosa la kuingia kwa mchuuzi:', err.message);
-        return res.status(500).json({ error: 'Kosa la seva. Tafadhali jaribu tena.' });
-      }
-      if (results.length > 0) {
-        res.json({ success: true, message: 'Umeingia kwa mafanikio.', retailer: results[0] });
-      } else {
-        res.status(401).json({ success: false, error: 'Jina au Nambari ya TIN si sahihi.' });
-      }
+
+  if (!name || !tinNumber) {
+    return res.status(400).json({ error: 'Jina la mfanyabiashara na TIN zinahitajika.' });
+  }
+
+  db.query('SELECT retailer_id, name, phone_number, location, tin_number FROM retailers WHERE name = ? AND tin_number = ?', [name, tinNumber], (err, results) => {
+    if (err) {
+      console.error('Kosa wakati wa kuingia kwa mfanyabiashara:', err.message);
+      return res.status(500).json({ error: 'Imeshindikana kuingia.' });
     }
-  );
+    if (results.length > 0) {
+      res.json({ success: true, message: 'Umeingia kikamilifu!', retailer: results[0] });
+    } else {
+      res.status(401).json({ success: false, error: 'Jina la mtumiaji au TIN si sahihi.' });
+    }
+  });
+});
+
+// Get retailer details by ID
+app.get('/api/retailers/:id', (req, res) => {
+  const retailerId = req.params.id;
+  db.query('SELECT retailer_id, name, phone_number, location, tin_number FROM retailers WHERE retailer_id = ?', [retailerId], (err, results) => {
+    if (err) {
+      console.error('Kosa wakati wa kupata maelezo ya mfanyabiashara:', err.message);
+      return res.status(500).json({ error: 'Imeshindikana kupata maelezo ya mfanyabiashara.' });
+    }
+    if (results.length > 0) {
+      res.json({ retailer: results[0] });
+    } else {
+      res.status(404).json({ error: 'Mfanyabiashara hakupatikana.' });
+    }
+  });
 });
 
 // Update retailer details
-app.put('/api/retailers/:retailerId', (req, res) => {
-  const retailerId = req.params.retailerId;
+app.put('/api/retailers/:id', (req, res) => {
+  const retailerId = req.params.id;
   const { name, phoneNumber, location, tinNumber } = req.body;
+
+  if (!name || !phoneNumber || !location || !tinNumber) {
+    return res.status(400).json({ error: 'Tafadhali jaza taarifa zote muhimu: jina, nambari ya simu, eneo, na TIN.' });
+  }
+
   db.query(
     'UPDATE retailers SET name = ?, phone_number = ?, location = ?, tin_number = ? WHERE retailer_id = ?',
     [name, phoneNumber, location, tinNumber, retailerId],
     (err, result) => {
       if (err) {
-        console.error(' Kosa katika kusahihisha maelezo ya mchuuzi:', err.message);
-        return res.status(500).json({ error: 'Imeshindikana kusahihisha maelezo ya mchuuzi.' });
+        console.error('Kosa wakati wa kubadili maelezo ya mfanyabiashara:', err.message);
+        return res.status(500).json({ error: 'Imeshindikana kubadili maelezo ya mfanyabiashara.' });
       }
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Mfanyabiashara hakupatikana.' });
       }
-      res.json({ success: true, message: 'Maelezo ya mfanyabiashara yamebadilishwa kikamilifu.' });
+      res.json({ success: true, message: 'Maelezo ya mfanyabiashara yamebadilishwa kikamilifu!' });
     }
   );
 });
 
-// Get products for a specific retailer
+// Get products by retailer ID
 app.get('/api/products/:retailerId', (req, res) => {
   const retailerId = req.params.retailerId;
-  db.query('SELECT * FROM products WHERE retailer_id = ?', [retailerId], (err, results) => {
+  db.query('SELECT product_id, product_name, product_cost FROM products WHERE retailer_id = ?', [retailerId], (err, results) => {
     if (err) {
-      console.error(' Kosa katika kupata bidhaa za mchuuzi:', err.message);
+      console.error('Kosa katika kupata bidhaa:', err.message);
       return res.status(500).json({ error: 'Imeshindikana kupata bidhaa.' });
     }
     res.json(results);
@@ -114,12 +158,16 @@ app.get('/api/products/:retailerId', (req, res) => {
 // Add a new product
 app.post('/api/products', (req, res) => {
   const { name, price, retailerId } = req.body;
+  if (!name || !price || !retailerId) {
+    return res.status(400).json({ error: 'Jina la bidhaa, bei, na kitambulisho cha mfanyabiashara vinahitajika.' });
+  }
+
   db.query(
-    'INSERT INTO products (retailer_id, product_name, product_cost) VALUES (?, ?, ?)',
-    [retailerId, name, price],
+    'INSERT INTO products (product_name, product_cost, retailer_id) VALUES (?, ?, ?)',
+    [name, parseFloat(price), retailerId], // Ensure price is stored as number
     (err, result) => {
       if (err) {
-        console.error(' Kosa katika kuongeza bidhaa:', err.message);
+        console.error('Kosa katika kuongeza bidhaa:', err.message);
         return res.status(500).json({ error: 'Imeshindikana kuongeza bidhaa.' });
       }
       res.status(201).json({ message: 'Bidhaa imeongezwa kikamilifu!', productId: result.insertId });
@@ -127,159 +175,239 @@ app.post('/api/products', (req, res) => {
   );
 });
 
-// Update product details
-app.put('/api/products/:productId', (req, res) => {
-  const productId = req.params.productId;
+// Update a product
+app.put('/api/products/:id', (req, res) => {
+  const productId = req.params.id;
   const { name, price } = req.body;
+
+  if (!name || !price) {
+    return res.status(400).json({ error: 'Jina la bidhaa na bei vinahitajika.' });
+  }
+
   db.query(
     'UPDATE products SET product_name = ?, product_cost = ? WHERE product_id = ?',
-    [name, price, productId],
+    [name, parseFloat(price), productId], // Ensure price is stored as number
     (err, result) => {
       if (err) {
-        console.error(' Kosa katika kusahihisha bidhaa:', err.message);
-        return res.status(500).json({ error: 'Imeshindikana kusahihisha bidhaa.' });
+        console.error('Kosa wakati wa kubadili bidhaa:', err.message);
+        return res.status(500).json({ error: 'Imeshindikana kubadili bidhaa.' });
       }
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Bidhaa haikupatikana.' });
       }
-      res.json({ success: true, message: 'Bidhaa imesasishwa kikamilifu.' });
+      res.json({ message: 'Bidhaa imebadilishwa kikamilifu!' });
     }
   );
 });
 
 // Delete a product
-app.delete('/api/products/:productId', (req, res) => {
-  const productId = req.params.productId;
+app.delete('/api/products/:id', (req, res) => {
+  const productId = req.params.id;
+
   db.query('DELETE FROM products WHERE product_id = ?', [productId], (err, result) => {
     if (err) {
-      console.error(' Kosa katika kufuta bidhaa:', err.message);
+      console.error('Kosa wakati wa kufuta bidhaa:', err.message);
       return res.status(500).json({ error: 'Imeshindikana kufuta bidhaa.' });
     }
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Bidhaa haikupatikana.' });
     }
-    res.json({ success: true, message: 'Bidhaa imefutwa kikamilifu.' });
+    res.json({ message: 'Bidhaa imefutwa kikamilifu!' });
   });
 });
 
-// Place a new order (MODIFIED TO HANDLE MULTIPLE ITEMS)
-app.post('/api/orders', async (req, res) => {
-  const { name, phoneNumber, location, retailerId, items } = req.body; // 'items' is an array of {productId, quantity, price}
+// Place a new order (updated with proper numeric handling)
+app.post('/api/orders', (req, res) => {
+  const { name, phoneNumber, location, retailerId, items } = req.body;
 
-  if (!retailerId || !items || items.length === 0) {
-    return res.status(400).json({ error: 'Taarifa za agizo si sahihi. Hakikisha kuna retailerId na bidhaa.' });
+  if (!name || !phoneNumber || !location || !retailerId || !items || items.length === 0) {
+    return res.status(400).json({ error: 'Taarifa zote za agizo (jina, simu, eneo, mfanyabiashara, na bidhaa) zinahitajika.' });
   }
 
-  try {
-    // Start a transaction for atomicity
-    await db.promise().beginTransaction();
-
-    // 1. Insert into orders table
-    const [orderResult] = await db.promise().query(
-      'INSERT INTO orders (customer_name, phone_number, location, retailer_id) VALUES (?, ?, ?, ?)',
-      [name, phoneNumber, location, retailerId]
-    );
-    const orderId = orderResult.insertId;
-
-    // 2. Insert into order_items table for each item
-    for (const item of items) {
-      const { productId, quantity, price } = item;
-      if (!productId || !quantity || quantity <= 0 || !price || price < 0) {
-        await db.promise().rollback();
-        return res.status(400).json({ error: 'Maelezo ya bidhaa si sahihi kwenye mkokoteni.' });
-      }
-      await db.promise().query(
-        'INSERT INTO order_items (order_id, product_id, quantity, item_price) VALUES (?, ?, ?, ?)',
-        [orderId, productId, quantity, price]
-      );
+  db.beginTransaction(err => {
+    if (err) {
+      console.error('Kosa kuanza transaction:', err.message);
+      return res.status(500).json({ error: 'Imeshindikana kutuma agizo.' });
     }
 
-    // Commit the transaction
-    await db.promise().commit();
-    res.status(201).json({ message: 'Agizo limewekwa kikamilifu!', orderId: orderId });
+    // First, check if customer exists, if not, create new customer
+    db.query('SELECT customer_id FROM customers WHERE phone_number = ?', [phoneNumber], (err, results) => {
+      if (err) {
+        return db.rollback(() => {
+          console.error('Kosa kuangalia mteja:', err.message);
+          res.status(500).json({ error: 'Imeshindikana kutuma agizo.' });
+        });
+      }
 
-  } catch (err) {
-    // Rollback in case of any error
-    await db.promise().rollback();
-    console.error(' Kosa katika kutuma agizo:', err.message);
-    res.status(500).json({ error: 'Imeshindikana kutuma agizo. Tafadhali jaribu tena.' });
-  }
+      let customerId;
+      if (results.length > 0) {
+        customerId = results[0].customer_id;
+      } else {
+        // Create new customer
+        db.query('INSERT INTO customers (name, phone_number, location) VALUES (?, ?, ?)', 
+          [name, phoneNumber, location], 
+          (err, result) => {
+            if (err) {
+              return db.rollback(() => {
+                console.error('Kosa kusajili mteja mpya:', err.message);
+                res.status(500).json({ error: 'Imeshindikana kusajili mteja mpya.' });
+              });
+            }
+            customerId = result.insertId;
+            proceedWithOrderInsertion(customerId);
+          }
+        );
+      }
+
+      if (customerId) {
+        proceedWithOrderInsertion(customerId);
+      }
+    });
+
+    function proceedWithOrderInsertion(customerId) {
+      // Insert into orders table
+      db.query(
+        'INSERT INTO orders (customer_id, retailer_id, order_status) VALUES (?, ?, ?)',
+        [customerId, retailerId, 'agizo jipya'],
+        (err, orderResult) => {
+          if (err) {
+            return db.rollback(() => {
+              console.error('Kosa kuweka agizo:', err.message);
+              res.status(500).json({ error: 'Imeshindikana kutuma agizo.' });
+            });
+          }
+
+          const orderId = orderResult.insertId;
+          const orderItemsData = items.map(item => [
+            orderId, 
+            item.productId, 
+            item.quantity, 
+            parseFloat(item.price) // Ensure price is stored as number
+          ]);
+
+          // Insert into order_items table
+          db.query(
+            'INSERT INTO order_items (order_id, product_id, quantity, item_price) VALUES ?',
+            [orderItemsData],
+            (err) => {
+              if (err) {
+                return db.rollback(() => {
+                  console.error('Kosa kuweka bidhaa za agizo:', err.message);
+                  res.status(500).json({ error: 'Imeshindikana kutuma agizo.' });
+                });
+              }
+
+              db.commit(err => {
+                if (err) {
+                  return db.rollback(() => {
+                    console.error('Kosa kucommit transaction:', err.message);
+                    res.status(500).json({ error: 'Imeshindikana kutuma agizo.' });
+                  });
+                }
+                res.status(201).json({ message: 'Agizo limetumwa kikamilifu!', orderId: orderId });
+              });
+            }
+          );
+        }
+      );
+    }
+  });
 });
 
-// Get orders for a specific retailer (MODIFIED TO FETCH ALL ORDER ITEMS - NO JSON_ARRAYAGG)
+// Get all orders for a retailer with detailed information (updated)
 app.get('/api/retailers/:retailerId/orders', (req, res) => {
   const retailerId = req.params.retailerId;
-  const customerNameFilter = req.query.customerName;
+  const customerName = req.query.customerName;
 
-  let query = `
-    SELECT
-      o.order_id,
-      o.customer_name,
-      o.phone_number,
-      o.location,
-      o.order_status,
-      o.created_at,
-      p.product_name,
-      oi.item_price,
-      oi.quantity
-    FROM
-      orders o
-    JOIN
-      order_items oi ON o.order_id = oi.order_id
-    JOIN
-      products p ON oi.product_id = p.product_id
-    WHERE
-      o.retailer_id = ?
-  `;
-  const params = [retailerId];
-
-  if (customerNameFilter) {
-    query += ` AND o.customer_name LIKE ?`;
-    params.push(`%${customerNameFilter}%`);
+  // Validate retailerId
+  if (isNaN(retailerId)) {
+    return res.status(400).json({ error: 'ID ya mfanyabiashara si sahihi' });
   }
 
-  query += ` ORDER BY o.created_at DESC, o.order_id, p.product_name;`; // Order to help grouping
+  let query = `
+    SELECT 
+      o.order_id,
+      c.name AS customer_name,
+      c.phone_number,
+      c.location,
+      o.order_status,
+      oi.product_id,
+      p.product_name,
+      oi.quantity,
+      oi.item_price,
+      o.created_at,
+      r.name AS retailer_name,
+      r.retailer_id
+    FROM orders o
+    JOIN customers c ON o.customer_id = c.customer_id
+    JOIN order_items oi ON o.order_id = oi.order_id
+    JOIN products p ON oi.product_id = p.product_id
+    JOIN retailers r ON o.retailer_id = r.retailer_id
+    WHERE o.retailer_id = ?
+  `;
+
+  let params = [retailerId];
+
+  if (customerName) {
+    query += ' AND c.name LIKE ?';
+    params.push(`%${customerName}%`);
+  }
+
+  query += ' ORDER BY o.created_at DESC';
 
   db.query(query, params, (err, results) => {
     if (err) {
-      console.error(' Kosa katika kupata maagizo ya mchuuzi:', err.message);
-      return res.status(500).json({ error: 'Imeshindikana kupata maagizo ya mchuuzi.' });
+      console.error('Database error:', err);
+      return res.status(500).json({
+        error: 'Imeshindikana kupata maagizo',
+        details: err.message
+      });
     }
 
-    // Manually group the results in Node.js
-    const ordersMap = new Map();
-
-    results.forEach(row => {
-      if (!ordersMap.has(row.order_id)) {
-        ordersMap.set(row.order_id, {
-          order_id: row.order_id,
-          customer_name: row.customer_name,
-          phone_number: row.phone_number,
-          location: row.location,
-          order_status: row.order_status,
-          created_at: row.created_at,
+    // Group orders by order_id for better structure
+    const groupedOrders = results.reduce((acc, item) => {
+      if (!acc[item.order_id]) {
+        acc[item.order_id] = {
+          order_id: item.order_id,
+          customer_name: item.customer_name,
+          phone_number: item.phone_number,
+          location: item.location,
+          order_status: item.order_status,
+          created_at: item.created_at,
+          retailer_name: item.retailer_name,
+          retailer_id: item.retailer_id,
           items: []
-        });
+        };
       }
-      ordersMap.get(row.order_id).items.push({
-        product_name: row.product_name,
-        product_cost: row.item_price,
-        quantity: row.quantity
+      acc[item.order_id].items.push({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        item_price: parseFloat(item.item_price) // Ensure price is number
       });
-    });
+      return acc;
+    }, {});
 
-    const groupedOrders = Array.from(ordersMap.values());
-    res.json(groupedOrders);
+    res.json(Object.values(groupedOrders));
   });
 });
 
-// Endpoint to update order status
+// Update order status
 app.put('/api/orders/:orderId/status', (req, res) => {
   const orderId = req.params.orderId;
   const { status } = req.body;
 
-  if (!['approved', 'rejected', 'pending', 'agizo limepitishwa'].includes(status)) {
-    return res.status(400).json({ error: 'Hali ya agizo si sahihi. Lazima iwe approved, rejected, pending, au agizo limepitishwa.' });
+  // Validate input
+  if (!status) {
+    return res.status(400).json({ error: 'Hali ya agizo inahitajika' });
+  }
+
+  const validStatuses = ['agizo jipya', 'agizo limepitishwa', 'agizo limekataliwa', 'agizo limekamilika'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({
+      error: 'Hali si sahihi',
+      valid_statuses: validStatuses
+    });
   }
 
   db.query(
@@ -287,17 +415,203 @@ app.put('/api/orders/:orderId/status', (req, res) => {
     [status, orderId],
     (err, result) => {
       if (err) {
-        console.error(' Kosa katika kusasisha hali ya agizo:', err.message);
-        return res.status(500).json({ error: 'Imeshindikana kusasisha hali ya agizo.' });
+        console.error('Database error:', err);
+        return res.status(500).json({
+          error: 'Imeshindikana kubadili hali ya agizo',
+          details: err.message
+        });
       }
+
       if (result.affectedRows === 0) {
-        return res.status(404).json({ error: 'Agizo halikupatikana.' });
+        return res.status(404).json({ error: 'Agizo halikupatikana' });
       }
-      res.json({ success: true, message: 'Hali ya agizo imesasishwa.' });
+
+      res.json({
+        success: true,
+        message: `Hali ya agizo imebadilishwa kuwa: ${status}`,
+        order_id: orderId,
+        new_status: status
+      });
     }
   );
 });
 
+// Get daily sales report for a retailer
+app.get('/api/retailers/:retailerId/daily-sales', (req, res) => {
+  const retailerId = req.params.retailerId;
+  let date = req.query.date || new Date().toISOString().split('T')[0];
+
+  // Validate date format (YYYY-MM-DD)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({
+      error: 'Muundo wa tarehe si sahihi',
+      example: '2023-05-15'
+    });
+  }
+
+  // Validate retailerId
+  if (isNaN(retailerId)) {
+    return res.status(400).json({ error: 'ID ya mfanyabiashara si sahihi' });
+  }
+
+  const query = `
+    -- Overall sales for the day
+    SELECT 
+      COALESCE(SUM(oi.item_price * oi.quantity), 0) AS total_sales,
+      COUNT(DISTINCT o.order_id) AS total_orders
+    FROM orders o
+    JOIN order_items oi ON o.order_id = oi.order_id
+    WHERE o.retailer_id = ? 
+    AND DATE(o.created_at) = ?
+    AND o.order_status = 'agizo limekamilika';
+    
+    -- Product-wise sales
+    SELECT
+      p.product_name,
+      COALESCE(SUM(oi.quantity), 0) AS quantity_sold,
+      COALESCE(SUM(oi.item_price * oi.quantity), 0) AS total_product_cost
+    FROM orders o
+    JOIN order_items oi ON o.order_id = oi.order_id
+    JOIN products p ON oi.product_id = p.product_id
+    WHERE o.retailer_id = ?
+    AND DATE(o.created_at) = ?
+    AND o.order_status = 'agizo limekamilika'
+    GROUP BY p.product_name
+    ORDER BY quantity_sold DESC;
+  `;
+
+  db.query(query, [retailerId, date, retailerId, date], (err, results) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.status(500).json({
+        error: 'Imeshindikana kupata mauzo ya siku',
+        details: err.message
+      });
+    }
+
+    const response = {
+      date: date,
+      overallSales: {
+        total_sales: parseFloat(results[0][0].total_sales),
+        total_orders: results[0][0].total_orders
+      },
+      productSales: results[1].map(item => ({
+        product_name: item.product_name,
+        quantity_sold: item.quantity_sold,
+        total_product_cost: parseFloat(item.total_product_cost)
+      }))
+    };
+
+    res.json(response);
+  });
+});
+
+// Get customer's past orders by phone number
+app.get('/api/customer-orders/:phoneNumber', (req, res) => {
+  const phoneNumber = req.params.phoneNumber;
+
+  const query = `
+    SELECT
+        o.order_id,
+        c.customer_id,
+        c.name AS customer_name,
+        r.name AS retailer_name,
+        o.order_status,
+        o.created_at,
+        oi.product_id,
+        p.product_name,
+        oi.quantity,
+        oi.item_price AS product_cost
+    FROM
+        orders o
+    JOIN
+        customers c ON o.customer_id = c.customer_id
+    JOIN
+        retailers r ON o.retailer_id = r.retailer_id
+    JOIN
+        order_items oi ON o.order_id = oi.order_id
+    JOIN
+        products p ON oi.product_id = p.product_id
+    WHERE
+        c.phone_number = ?
+    ORDER BY
+        o.created_at DESC;
+  `;
+
+  db.query(query, [phoneNumber], (err, results) => {
+    if (err) {
+      console.error('Kosa wakati wa kupata maagizo ya mteja:', err.message);
+      return res.status(500).json({ error: 'Imeshindikana kupata maagizo ya mteja.' });
+    }
+
+    // Group items by order to return a cleaner structure
+    const groupedOrders = results.reduce((acc, item) => {
+      if (!acc[item.order_id]) {
+        acc[item.order_id] = {
+          order_id: item.order_id,
+          customer_id: item.customer_id,
+          customer_name: item.customer_name,
+          retailer_name: item.retailer_name,
+          retailer_id: item.retailer_id,
+          order_status: item.order_status,
+          created_at: item.created_at,
+          items: []
+        };
+      }
+      acc[item.order_id].items.push({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        product_cost: parseFloat(item.product_cost) // Ensure price is number
+      });
+      return acc;
+    }, {});
+
+    res.json(Object.values(groupedOrders));
+  });
+});
+
+// Submit feedback for a product
+app.post('/api/feedback/product', (req, res) => {
+  const { productId, customerId, orderId, feedback } = req.body;
+
+  if (!productId || !customerId || !orderId || !feedback) {
+    return res.status(400).json({ error: 'Bidhaa, mteja, agizo, na maoni vinahitajika.' });
+  }
+
+  db.query(
+    'INSERT INTO feedback (customer_id, product_id, order_id, feedback_text, feedback_type) VALUES (?, ?, ?, ?, ?)',
+    [customerId, productId, orderId, feedback, 'product'],
+    (err, result) => {
+      if (err) {
+        console.error('Kosa wakati wa kutuma maoni ya bidhaa:', err.message);
+        return res.status(500).json({ error: 'Imeshindikana kutuma maoni ya bidhaa.' });
+      }
+      res.status(201).json({ message: 'Maoni ya bidhaa yametumwa kikamilifu!', feedbackId: result.insertId });
+    }
+  );
+});
+
+// Submit feedback for a retailer
+app.post('/api/feedback/retailer', (req, res) => {
+  const { retailerId, customerId, orderId, feedback } = req.body;
+
+  if (!retailerId || !customerId || !orderId || !feedback) {
+    return res.status(400).json({ error: 'Mfanyabiashara, mteja, agizo, na maoni vinahitajika.' });
+  }
+
+  db.query(
+    'INSERT INTO feedback (customer_id, retailer_id, order_id, feedback_text, feedback_type) VALUES (?, ?, ?, ?, ?)',
+    [customerId, retailerId, orderId, feedback, 'retailer'],
+    (err, result) => {
+      if (err) {
+        console.error('Kosa wakati wa kutuma maoni ya mfanyabiashara:', err.message);
+        return res.status(500).json({ error: 'Imeshindikana kutuma maoni ya mfanyabiashara.' });
+      }
+      res.status(201).json({ message: 'Maoni ya mfanyabiashara yametumwa kikamilifu!', feedbackId: result.insertId });
+    }
+  );
+});
 
 // Start the server
 const PORT = 3001;
