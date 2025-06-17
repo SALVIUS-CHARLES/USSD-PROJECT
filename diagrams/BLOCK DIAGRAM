@@ -1,0 +1,116 @@
++-----------------------+
+|                       |
+|   USSD Interface      |  (Frontend: Simulator/Phone)
+|                       |
++-----------+-----------+
+            |
+            | (HTTP Requests)
+            v
++-----------------------+
+|                       |
+|   Backend Server      |  (Node.js + Express)
+|                       |
++-----------+-----------+
+            |
+            | (Database Queries)
+            v
++-----------------------+
+|                       |
+|   MySQL Database      |  (ussd_db)
+|                       |
++-----------+-----------+
+            |
+            | (Tables: Retailers, Products, Orders, etc.)
+            v
++-----------+-----------+
+|                       |
+|   Core Functionality  |
+|   (Modules)           |
++-----------------------+
+| 1. Retailer Mgmt      |  (Register, Login, Edit, View Sales)
+| 2. Product Mgmt       |  (Add, Edit, Delete Products)
+| 3. Order Processing   |  (Place, Track, Update Status)
+| 4. Feedback System    |  (Submit Feedback)
++-----------------------+
+
+Detailed Breakdown of Blocks:
+1. USSD Interface (Frontend)
+Input/Output:
+
+Handles user interactions via USSD menus (e.g., *# to start).
+
+Displays dynamic menus based on user role (Customer/Retailer).
+
+Key Features:
+
+Simulates phone keypad input (text/number cycling).
+
+Shows real-time responses (e.g., order confirmations, error messages).
+
+2. Backend Server (Node.js + Express)
+API Endpoints:
+
+/api/retailers: Retailer registration, login, profile updates.
+
+/api/products: Product CRUD operations.
+
+/api/orders: Order placement, status updates.
+
+/api/feedback: Feedback submission.
+
+Key Functions:
+
+Validates inputs (e.g., TIN format, phone numbers).
+
+Manages transactions (e.g., order placement with inventory checks).
+
+3. MySQL Database
+Tables:
+
+retailers: Stores retailer details (name, phone, TIN, location).
+
+products: Product catalog (name, price, linked to retailer).
+
+orders + order_items: Order history and itemized breakdowns.
+
+feedback: Customer feedback for products/retailers.
+
+4. Core Functionality Modules
+Retailer Management:
+
+Registration, login (via TIN/name), daily sales reports.
+
+Product Management:
+
+Add/edit/delete products (linked to retailer ID).
+
+Order Processing:
+
+Cart handling, checkout, status updates (e.g., "agizo limekamilika").
+
+Feedback System:
+
+Submits feedback to retailers/products via order history.
+
+Data Flow:
+Customer Flow:
+USSD → Backend → DB (e.g., place order → update orders table).
+
+Retailer Flow:
+USSD → Backend → DB (e.g., view sales → query orders and aggregate).
+
+Visual Representation (ASCII Art):
++---------------+       +----------------+       +-----------------+
+|               |       |                |       |                 |
+|   USSD        | ----> |   Backend      | ----> |   Database      |
+|   Interface   | <---- |   (Node.js)    | <---- |   (MySQL)       |
+|               |       |                |       |                 |
++---------------+       +----------------+       +-----------------+
+                             |
+                             v
+                    +-----------------+
+                    |                 |
+                    |   Core Logic    |
+                    |   (Modules)    |
+                    |                 |
+                    +-----------------+

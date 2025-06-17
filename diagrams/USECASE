@@ -1,0 +1,95 @@
++-------------------+       +---------------------+
+|                   |       |                     |
+|     Customer      |       |      Retailer       |
+|                   |       |                     |
++-------------------+       +---------------------+
+      |                               |
+      |                               |
+      |                               |
++-----|-------------------------------|---------------------+
+|     |                               |                     |
+|     |                               |                     |
+|     v                               v                     |
+| +-----------------+       +---------------------+         |
+| | View Retailers  |       | Register Retailer   |         |
+| +-----------------+       +---------------------+         |
+|                                                          |
+| +-----------------+       +---------------------+         |
+| | Select Products |       | Login (TIN/Name)    |         |
+| +-----------------+       +---------------------+         |
+|                                                          |
+| +-----------------+       +---------------------+         |
+| | Place Order     |       | Manage Products     |         |
+| +-----------------+       | (Add/Edit/Delete)   |         |
+|                           +---------------------+         |
+|                                                          |
+| +-----------------+       +---------------------+         |
+| | View Orders     |       | View Orders         |         |
+| +-----------------+       | (Accept/Reject/     |         |
+|                           | Complete)           |         |
+| +-----------------+       +---------------------+         |
+| | Provide Feedback|                                       |
+| | (Retailer/      |       +---------------------+         |
+| |  Product)       |       | View Daily Sales    |         |
+| +-----------------+       +---------------------+         |
+|                                                          |
+|                           +---------------------+         |
+|                           | Edit Profile        |         |
+|                           +---------------------+         |
++----------------------------------------------------------+
+
+Detailed Use Cases:
+Customer:
+View Retailers
+
+Browse a list of available retailers.
+
+Select Products
+
+Choose products from a retailer's catalog.
+
+Place Order
+
+Submit an order with selected products, quantity, and delivery details.
+
+View Orders
+
+Check past orders and their statuses.
+
+Provide Feedback
+
+Submit feedback for a retailer or specific product.
+
+Retailer:
+Register Retailer
+
+Sign up as a retailer with name, phone, location, and TIN.
+
+Login (TIN/Name)
+
+Authenticate using TIN and name.
+
+Manage Products
+
+Add, edit, or delete products in their catalog.
+
+View Orders
+
+See incoming orders and update their status (Accept/Reject/Complete).
+
+View Daily Sales
+
+Check sales reports for the day (total sales, product-wise breakdown).
+
+Edit Profile
+
+Update retailer details (name, phone, location, TIN).
+
+Relationships:
+Both actors interact with the system independently.
+
+Customers interact with retailers indirectly via orders and feedback.
+
+Retailers manage their own products and orders.
+
+This diagram captures all major functionalities from your codebase while keeping it clear and structured. Let me know if you'd like any refinements!

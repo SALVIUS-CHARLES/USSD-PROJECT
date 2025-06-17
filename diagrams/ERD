@@ -1,0 +1,63 @@
+customers
++-------------+
+| customer_id | PK
+| name        |
+| phone_number|
+| location    |
+| created_at  |
++-------------+
+      |
+      | 1
+      |———< Places
+      |      (customer_id)
+      V
++-------------+
+|   orders    |
++-------------+
+| order_id    | PK
+| customer_id | FK
+| retailer_id | FK
+| order_status|
+| created_at  |
++-------------+
+      |
+      | 1
+      |———< Contains
+      |      (order_id)
+      V
++----------------+
+|  order_items   |
++----------------+
+| order_item_id  | PK
+| order_id       | FK
+| product_id     | FK
+| quantity       |
+| item_price     |
++----------------+
+                 ^
+                 | 
+                 | 1
+products         |———< Includes
++-------------+  |      (product_id)
+| product_id  | PK
+| product_name|
+| product_cost|
+| retailer_id | FK
+| created_at  |
++-------------+
+      ^
+      | 1
+      |———< Owns
+      |      (retailer_id)
+      |
+retailers
++--------------+
+| retailer_id  | PK
+| name         |
+| phone_number |
+| tin_number   |
+| location     |
+| status       |
+| created_at   |
+| is_approved  |
++--------------+
