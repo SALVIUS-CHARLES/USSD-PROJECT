@@ -1415,7 +1415,6 @@ function fetchRetailerOrders(customerNameFilter) {
           ussdOutput += `  Mteja: ${order.customer_name}\n`;
           ussdOutput += `  Simu: ${order.phone_number}\n`;
           ussdOutput += `  Hali: ${order.order_status}\n`;
-          ussdOutput += `  Jumla: TSH ${total.toFixed(0)}\n`; // Format to 0 decimal places
         });
       }
       ussdOutput += "\nChagua nambari ya agizo kuchagua au 0 kurudi.";
