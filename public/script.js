@@ -87,7 +87,8 @@ function updateDisplay() {
     (currentStep === "customerSelectFeedbackType" && !currentInput) || // NEW: Select feedback type
     (currentStep === "customerSelectProductForFeedback" && !currentInput) || // NEW: Select product for feedback
     (currentStep === "customerProvideFeedback" && !currentInput) || // NEW: Provide feedback
-    (currentStep === "feedbackSuccess" && !currentInput)) { // NEW: Feedback success
+    (currentStep === "feedbackSuccess" && !currentInput) || // NEW: Feedback success
+    (currentStep === "viewFeedback" && !currentInput)) { // NEW: View feedback
     document.getElementById("inputLine").style.display = "none";
   } else {
     document.getElementById("inputLine").style.display = "flex";
@@ -257,7 +258,7 @@ function retailerGoBack() {
   } else if (currentStep === "enterRetailerName") {
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
   } else if (currentStep === "enterRetailerPhone") {
     currentStep = "enterRetailerName";
     currentInput = "";
@@ -274,7 +275,7 @@ function retailerGoBack() {
   else if (currentStep === "productMenu") {
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
   } else if (currentStep === "addProductName") {
     currentStep = "productMenu";
     currentInput = "";
@@ -302,7 +303,7 @@ function retailerGoBack() {
   } else if (currentStep === "selectOrderToActOn" || currentStep === "ordersList") { // ordersList is for when no orders or after action
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
     selectedOrder = null;
   } else if (currentStep === "orderAction") {
     currentStep = "selectOrderToActOn";
@@ -313,7 +314,7 @@ function retailerGoBack() {
   else if (currentStep === "retailerLoginName") {
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
     retailerDetails.loginName = "";
     retailerDetails.loginTin = "";
   } else if (currentStep === "retailerLoginTin") { // Changed from retailerLoginId
@@ -324,7 +325,7 @@ function retailerGoBack() {
   } else if (currentStep === "editRetailerName") {
     currentStep = "retailerMenu"; // After editing, go back to main retailer menu
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
   } else if (currentStep === "editRetailerPhone") {
     currentStep = "editRetailerName";
     currentInput = "";
@@ -340,7 +341,11 @@ function retailerGoBack() {
   } else if (currentStep === "viewDailySales") { // NEW: Back from daily sales view
     currentStep = "retailerMenu";
     currentInput = "";
-    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
+  } else if (currentStep === "viewFeedback") { // NEW: Back from feedback view
+    currentStep = "retailerMenu";
+    currentInput = "";
+    ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
   }
   else {
     currentInput = "";
@@ -374,7 +379,7 @@ function sendInput() {
       userRole = "retailer";
       currentStep = "retailerMenu";
       currentInput = "";
-      ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi"; // Updated menu here
+      ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
     } else {
       ussdInput = "Chaguo si sahihi. Weka 1 au 2.";
       currentInput = "";
@@ -653,7 +658,6 @@ function calculateCartTotal() {
   return orderDetails.cart.reduce((total, item) => total + (item.product.product_cost * item.quantity), 0);
 }
 
-
 function showOrderConfirmation() {
   let orderSummary = `Hakiki agizo:\n
 Jina: ${orderDetails.name}
@@ -834,7 +838,6 @@ function sendFeedback(feedbackText) {
     });
 }
 
-
 // Retailer functionality
 function handleRetailerInput(userInput) {
   switch (currentStep) {
@@ -878,12 +881,20 @@ function handleRetailerInput(userInput) {
           ussdInput = "Weka jina lako la mchuuzi ili uingie:";
           retailerDetails.nextAction = "viewDailySales"; // Set next action after login
         }
+      } else if (userInput === "6") { // NEW: Angalia Maoni (View Feedback)
+        if (currentRetailerId) {
+          fetchRetailerFeedback();
+        } else {
+          currentStep = "retailerLoginName";
+          ussdInput = "Weka jina lako la mchuuzi ili uingie:";
+          retailerDetails.nextAction = "viewFeedback"; // Set next action after login
+        }
       } else if (userInput === "0") {
         currentStep = "start";
         ussdInput = "bofya *# kuanza";
         userRole = null;
       } else {
-        ussdInput = "Chaguo si sahihi. Weka 1, 2, 3, 4, 5 au 0."; // Updated options
+        ussdInput = "Chaguo si sahihi. Weka 1, 2, 3, 4, 5, 6 au 0."; // Updated options
       }
       break;
 
@@ -1042,7 +1053,6 @@ function handleRetailerInput(userInput) {
       }
       break;
 
-
     case "orderAction":
       if (!selectedOrder) {
         ussdInput = "Hakuna agizo lililochaguliwa. Tafadhali rudi kwenye orodha ya maagizo.\n0. Rudi";
@@ -1117,12 +1127,19 @@ function handleRetailerInput(userInput) {
       }
       break;
 
+    case "viewFeedback": // NEW: Handle input from feedback view
+      if (userInput === "0") {
+        retailerGoBack(); // Go back to retailer menu
+      } else {
+        ussdInput = "Chaguo si sahihi. Weka 0 kurudi.";
+      }
+      break;
+
     default:
       ussdInput = "Hali si sahihi. Tafadhali anza upya.";
       break;
   }
 }
-
 
 function showProductMenu() {
   ussdInput = "Menyu ya Bidhaa:\n1. Ongeza Bidhaa Mpya\n2. Tazama Bidhaa Zangu\n0. Rudi";
@@ -1195,11 +1212,14 @@ function retailerLogin() {
         } else if (retailerDetails.nextAction === "viewDailySales") {
           fetchDailySales();
           retailerDetails.nextAction = null; // Clear action
+        } else if (retailerDetails.nextAction === "viewFeedback") {
+          fetchRetailerFeedback();
+          retailerDetails.nextAction = null; // Clear action
         }
         else {
           // Default to product menu or main retailer menu if no specific action
           currentStep = "retailerMenu";
-          ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n0. Rudi";
+          ussdInput = "Menyu ya Mfanyabiashara:\n1. Jisajili\n2. Duka la Bidhaa\n3. Badili Usajili\n4. Angalia Amri\n5. Angalia Mauzo ya Siku\n6. Angalia Maoni\n0. Rudi";
         }
       } else {
         loginAttempts++;
@@ -1429,6 +1449,7 @@ function fetchRetailerOrders(customerNameFilter) {
       console.error(err);
     });
 }
+
 // Function to update order status (accept, reject, complete)
 function updateOrderStatus(orderId, status) {
   fetch(`http://localhost:3001/api/orders/${orderId}/status`, {
@@ -1493,6 +1514,50 @@ function fetchDailySales() {
     });
 }
 
+// NEW FUNCTION: Fetch and display retailer feedback
+function fetchRetailerFeedback() {
+  fetch(`http://localhost:3001/api/retailers/${currentRetailerId}/feedback`)
+    .then(response => response.json())
+    .then(data => {
+      let ussdOutput = "Maoni Yanayohusiana Nawe:\n";
+
+      // Display retailer feedback
+      if (data.retailerFeedback && data.retailerFeedback.length > 0) {
+        ussdOutput += "\nMaoni Kuhusu Duka Lako:\n";
+        data.retailerFeedback.forEach((feedback, index) => {
+          ussdOutput += `${index + 1}. Kutoka: ${feedback.customer_name}\n`;
+          ussdOutput += `   Maoni: ${feedback.feedback_text}\n`;
+          ussdOutput += `   Tarehe: ${new Date(feedback.created_at).toLocaleDateString()}\n\n`;
+        });
+      } else {
+        ussdOutput += "\nHakuna maoni ya moja kwa moja kuhusu duka lako.\n";
+      }
+
+      // Display product feedback
+      if (data.productFeedback && data.productFeedback.length > 0) {
+        ussdOutput += "\nMaoni Kuhusu Bidhaa Zako:\n";
+        data.productFeedback.forEach((feedback, index) => {
+          ussdOutput += `${index + 1}. Bidhaa: ${feedback.product_name}\n`;
+          ussdOutput += `   Kutoka: ${feedback.customer_name}\n`;
+          ussdOutput += `   Maoni: ${feedback.feedback_text}\n`;
+          ussdOutput += `   Tarehe: ${new Date(feedback.created_at).toLocaleDateString()}\n\n`;
+        });
+      } else {
+        ussdOutput += "\nHakuna maoni kuhusu bidhaa zako.\n";
+      }
+
+      ussdOutput += "\n0. Rudi";
+      ussdInput = ussdOutput;
+      currentStep = "viewFeedback";
+      updateDisplay();
+    })
+    .catch(err => {
+      console.error('Error fetching feedback:', err);
+      ussdInput = "Kosa wakati wa kupata maoni. Tafadhali jaribu tena.\n\n0. Rudi";
+      currentStep = "retailerMenu";
+      updateDisplay();
+    });
+}
 function resetRetailer() {
   currentStep = "start";
   userRole = null;

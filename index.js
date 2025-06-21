@@ -244,8 +244,8 @@ app.post('/api/orders', (req, res) => {
         customerId = results[0].customer_id;
       } else {
         // Create new customer
-        db.query('INSERT INTO customers (name, phone_number, location) VALUES (?, ?, ?)', 
-          [name, phoneNumber, location], 
+        db.query('INSERT INTO customers (name, phone_number, location) VALUES (?, ?, ?)',
+          [name, phoneNumber, location],
           (err, result) => {
             if (err) {
               return db.rollback(() => {
@@ -279,9 +279,9 @@ app.post('/api/orders', (req, res) => {
 
           const orderId = orderResult.insertId;
           const orderItemsData = items.map(item => [
-            orderId, 
-            item.productId, 
-            item.quantity, 
+            orderId,
+            item.productId,
+            item.quantity,
             parseFloat(item.price) // Ensure price is stored as number
           ]);
 
@@ -571,48 +571,121 @@ app.get('/api/customer-orders/:phoneNumber', (req, res) => {
   });
 });
 
-// Submit feedback for a product
+// Submit feedback for a product - CORRECTED
 app.post('/api/feedback/product', (req, res) => {
   const { productId, customerId, orderId, feedback } = req.body;
 
-  if (!productId || !customerId || !orderId || !feedback) {
-    return res.status(400).json({ error: 'Bidhaa, mteja, agizo, na maoni vinahitajika.' });
-  }
-
-  db.query(
-    'INSERT INTO feedback (customer_id, product_id, order_id, feedback_text, feedback_type) VALUES (?, ?, ?, ?, ?)',
-    [customerId, productId, orderId, feedback, 'product'],
-    (err, result) => {
-      if (err) {
-        console.error('Kosa wakati wa kutuma maoni ya bidhaa:', err.message);
-        return res.status(500).json({ error: 'Imeshindikana kutuma maoni ya bidhaa.' });
-      }
-      res.status(201).json({ message: 'Maoni ya bidhaa yametumwa kikamilifu!', feedbackId: result.insertId });
+  // First get the retailer_id for this product
+  db.query('SELECT retailer_id FROM products WHERE product_id = ?', [productId], (err, productResults) => {
+    if (err || productResults.length === 0) {
+      return res.status(400).json({ error: 'Bidhaa haikupatikana.' });
     }
-  );
+
+    // Then get the retailer_id from the order to ensure consistency
+    db.query('SELECT retailer_id FROM orders WHERE order_id = ?', [orderId], (err, orderResults) => {
+      if (err || orderResults.length === 0) {
+        return res.status(400).json({ error: 'Agizo halikupatikana.' });
+      }
+
+      const retailerId = productResults[0].retailer_id;
+      const orderRetailerId = orderResults[0].retailer_id;
+
+      // Verify the product belongs to the retailer from the order
+      if (retailerId !== orderRetailerId) {
+        return res.status(400).json({ error: 'Bidhaa haihusiani na mfanyabiashara wa agizo hili.' });
+      }
+
+      db.query(
+        'INSERT INTO feedback (customer_id, product_id, retailer_id, order_id, feedback_text, feedback_type) VALUES (?, ?, ?, ?, ?, ?)',
+        [customerId, productId, retailerId, orderId, feedback, 'product'],
+        (err, result) => {
+          if (err) {
+            console.error('Error submitting product feedback:', err);
+            return res.status(500).json({ error: 'Imeshindikana kutuma maoni ya bidhaa.' });
+          }
+          res.status(201).json({ message: 'Maoni yamepokelewa!' });
+        }
+      );
+    });
+  });
 });
 
-// Submit feedback for a retailer
+// Submit feedback for a retailer - CORRECTED
 app.post('/api/feedback/retailer', (req, res) => {
   const { retailerId, customerId, orderId, feedback } = req.body;
 
-  if (!retailerId || !customerId || !orderId || !feedback) {
-    return res.status(400).json({ error: 'Mfanyabiashara, mteja, agizo, na maoni vinahitajika.' });
-  }
-
-  db.query(
-    'INSERT INTO feedback (customer_id, retailer_id, order_id, feedback_text, feedback_type) VALUES (?, ?, ?, ?, ?)',
-    [customerId, retailerId, orderId, feedback, 'retailer'],
-    (err, result) => {
-      if (err) {
-        console.error('Kosa wakati wa kutuma maoni ya mfanyabiashara:', err.message);
-        return res.status(500).json({ error: 'Imeshindikana kutuma maoni ya mfanyabiashara.' });
-      }
-      res.status(201).json({ message: 'Maoni ya mfanyabiashara yametumwa kikamilifu!', feedbackId: result.insertId });
+  // First verify the order belongs to this retailer
+  db.query('SELECT retailer_id FROM orders WHERE order_id = ?', [orderId], (err, results) => {
+    if (err || results.length === 0) {
+      return res.status(400).json({ error: 'Agizo halikupatikana.' });
     }
-  );
-});
 
+    const orderRetailerId = results[0].retailer_id;
+
+    if (orderRetailerId.toString() !== retailerId.toString()) {
+      return res.status(400).json({ error: 'Agizo halihusiani na mfanyabiashara huyu.' });
+    }
+
+    db.query(
+      'INSERT INTO feedback (customer_id, retailer_id, order_id, feedback_text, feedback_type) VALUES (?, ?, ?, ?, ?)',
+      [customerId, retailerId, orderId, feedback, 'retailer'],
+      (err, result) => {
+        if (err) {
+          console.error('Error submitting retailer feedback:', err);
+          return res.status(500).json({ error: 'Imeshindikana kutuma maoni.' });
+        }
+        res.status(201).json({ message: 'Maoni yamepokelewa!' });
+      }
+    );
+  });
+});
+// Get feedback for a retailer (NEW ENDPOINT)
+app.get('/api/retailers/:retailerId/feedback', (req, res) => {
+  const retailerId = req.params.retailerId;
+
+  const query = `
+    (SELECT 
+      f.feedback_id,
+      f.feedback_text,
+      'retailer' AS type,
+      f.created_at,
+      c.name AS customer_name,
+      o.order_id,
+      NULL AS product_name
+    FROM feedback f
+    JOIN customers c ON f.customer_id = c.customer_id
+    JOIN orders o ON f.order_id = o.order_id
+    WHERE f.retailer_id = ? AND f.feedback_type = 'retailer')
+    
+    UNION ALL
+    
+    (SELECT 
+      f.feedback_id,
+      f.feedback_text,
+      'product' AS type,
+      f.created_at,
+      c.name AS customer_name,
+      o.order_id,
+      p.product_name
+    FROM feedback f
+    JOIN customers c ON f.customer_id = c.customer_id
+    JOIN products p ON f.product_id = p.product_id
+    JOIN orders o ON f.order_id = o.order_id
+    WHERE f.retailer_id = ? AND f.feedback_type = 'product')
+    
+    ORDER BY created_at DESC
+  `;
+
+  db.query(query, [retailerId, retailerId], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: 'Kosa la kupata maoni.' });
+    }
+    res.json({
+      retailerFeedback: results.filter(fb => fb.type === 'retailer'),
+      productFeedback: results.filter(fb => fb.type === 'product')
+    });
+  });
+});
 // Start the server
 const PORT = 3001;
 app.listen(PORT, () => {
